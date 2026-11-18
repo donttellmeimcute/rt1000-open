@@ -42,11 +42,11 @@ static void ui_main(int gps_fix, unsigned long fa_hz, unsigned long fb_hz){
     char line[64];
     lcd_fill(LCD_BLACK);
     lcd_text(4, 4, "RT-1000Pro open", LCD_WHITE, LCD_BLACK);
-    snprintf(line, sizeof line, "A %lu.%03lu MHz",
-             fa_hz / 1000000, (fa_hz % 1000000) / 1000);
+    snprintf(line, sizeof line, "A %lu.%04lu MHz",
+             fa_hz / 1000000, (fa_hz % 1000000) / 100);
     lcd_text(4, 20, line, LCD_GREEN, LCD_BLACK);
-    snprintf(line, sizeof line, "B %lu.%03lu MHz",
-             fb_hz / 1000000, (fb_hz % 1000000) / 1000);
+    snprintf(line, sizeof line, "B %lu.%04lu MHz",
+             fb_hz / 1000000, (fb_hz % 1000000) / 100);
     lcd_text(4, 36, line, LCD_GREEN, LCD_BLACK);
     if(gps_fix){
         snprintf(line, sizeof line, "GPS %02d:%02d:%02d %.4f %.4f",

@@ -21,9 +21,9 @@ static void ui_draw_main(void){
     char line[32];
     lcd_fill(LCD_BLACK);
     lcd_text(4, 4, "RT-1000Pro open", LCD_WHITE, LCD_BLACK);
-    snprintf(line, sizeof line, "A %lu.%03lu MHz", (unsigned long)(vfo_a.freq_hz/1000000), (unsigned long)((vfo_a.freq_hz%1000000)/1000));
+    snprintf(line, sizeof line, "A %lu.%04lu MHz", (unsigned long)(vfo_a.freq_hz/1000000), (unsigned long)((vfo_a.freq_hz%1000000)/100));
     lcd_text(4, 20, line, LCD_GREEN, LCD_BLACK);
-    snprintf(line, sizeof line, "B %lu.%03lu MHz", (unsigned long)(vfo_b.freq_hz/1000000), (unsigned long)((vfo_b.freq_hz%1000000)/1000));
+    snprintf(line, sizeof line, "B %lu.%04lu MHz", (unsigned long)(vfo_b.freq_hz/1000000), (unsigned long)((vfo_b.freq_hz%1000000)/100));
     lcd_text(4, 36, line, LCD_GREEN, LCD_BLACK);
     if(gps.valid){
         snprintf(line, sizeof line, "GPS %02d:%02d:%02d %.4f %.4f", gps.hour, gps.min, gps.sec, gps.lat, gps.lon);
