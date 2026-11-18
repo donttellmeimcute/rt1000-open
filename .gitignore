@@ -1,0 +1,14 @@
+# Firmware propietario y archivos del actualizador oficial: no se redistribuyen
+*.hex
+*.bin
+*.exe
+*.dll
+firmware.bin
+Radtel_*.exe
+# Build
+firmware/build/
+__pycache__/
+*.pyc
+.venv/
+*.o
+*.elf
