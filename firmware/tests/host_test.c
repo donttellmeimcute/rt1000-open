@@ -12,6 +12,9 @@
 #include "aprs.h"
 #include "vfo.h"
 #include "storage.h"
+#include "tones.h"
+#include "bk4829.h"
+#include "ui.h"
 #include "display.h"
 #include "hal.h"
 extern uint8_t mock_flash[];
@@ -38,14 +41,111 @@ int main(void){
     CHECK(g.fix && fabs(g.lat-48.1173)<0.001 && fabs(g.lon-11.5167)<0.001,"NMEA lat/lon GPRMC");
     CHECK(!rt1000_nmea_parse("$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6B",&g),"NMEA checksum malo se rechaza");
     CHECK(rt1000_nmea_parse("$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47",&g)&&g.fix,"NMEA GPGGA valido");
+    CHECK(g.sats==8,"NMEA GPGGA: 8 satelites");
+    CHECK(fabs(g.alt_m-545.4)<0.1,"NMEA GPGGA: altitud 545.4 m");
+    /* RMC posterior conserva los sats del ultimo GGA */
+    CHECK(rt1000_nmea_parse("$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A",&g)&&g.fix,"NMEA RMC tras GGA");
+    CHECK(g.sats==8 && fabs(g.speed_kmh-41.5)<0.2 && fabs(g.course-84.4)<0.1,"NMEA RMC: sats conservados, vel 41.5 km/h, rumbo 84.4");
     /* APRS */
     uint8_t frame[128]; size_t n=rt1000_aprs_position(frame,sizeof frame,"XE1ARS",7,"APRS",19.5,-98.9,0,"test");
     CHECK(n>20 && frame[14]==0x03 && frame[15]==0xF0,"APRS frame AX.25 UI");
     CHECK(memcmp(frame+7,"XE1ARS",6)==0 || 1,"APRS src presente (shifted, ver bytes)");
+    /* APRS con path + FCS */
+    uint8_t fr2[160];
+    size_t n2 = rt1000_aprs_position_path(fr2, sizeof fr2, "XE1ARS", 0, "APRS",
+                                          "WIDE1-1,WIDE2-1", 19.5, -98.9, 0, "test");
+    CHECK(n2 > 20 && rt1000_ax25_fcs_ok(fr2, n2) == false, "APRS path: frame sin FCS aun no verifica");
+    uint16_t fcs = rt1000_ax25_fcs(fr2, n2);
+    fr2[n2++] = (uint8_t)(fcs & 0xFF); fr2[n2++] = (uint8_t)(fcs >> 8);
+    CHECK(rt1000_ax25_fcs_ok(fr2, n2), "APRS path: FCS X.25 verifica tras anexar");
+    /* path DIRECTO (sin digipeaters) == frame base */
+    uint8_t fr3[128];
+    size_t n3 = rt1000_aprs_position_path(fr3, sizeof fr3, "XE1ARS", 7, "APRS", "", 19.5, -98.9, 0, "test");
+    CHECK(n3 == n, "APRS path vacio == frame base");
     /* VFO */
     CHECK(rt1000_freq_in_rx_range(146520000u)&&rt1000_freq_in_rx_range(27000000u),"VFO RX en rango");
     CHECK(rt1000_freq_tx_allowed(146520000u)&&!rt1000_freq_tx_allowed(120000000u),"VFO TX: 2m si, airband no");
     CHECK(!rt1000_freq_in_rx_range(900000000u),"VFO RX fuera de rango");
+    /* Repetidor: shift/offset/talkaround */
+    CHECK(rt1000_tx_freq(146520000u, 1, 600000u, false) == 147120000u, "TX shift +600k en 2m");
+    CHECK(rt1000_tx_freq(146520000u, -1, 600000u, false) == 145920000u, "TX shift -600k en 2m");
+    CHECK(rt1000_tx_freq(146520000u, 1, 600000u, true) == 146520000u, "TX talkaround = RX");
+    CHECK(rt1000_tx_freq(146520000u, 0, 600000u, false) == 146520000u, "TX shift 0 = RX");
+    CHECK(rt1000_tx_freq(120000000u, 1, 600000u, false) == 0, "TX airband prohibido -> 0");
+    CHECK(rt1000_tx_freq(435000000u, 1, 5000000u, false) == 440000000u, "TX shift +5M en 70cm");
+    /* NOAA */
+    CHECK(rt1000_noaa_freq(1) == 162400000u && rt1000_noaa_freq(7) == 162550000u, "NOAA WX1/WX7");
+    CHECK(rt1000_noaa_freq(0) == 0 && rt1000_noaa_freq(8) == 0, "NOAA fuera de rango -> 0");
+    CHECK(strcmp(rt1000_noaa_name(3), "WX3") == 0, "NOAA nombre WX3");
+    /* Scan */
+    CHECK(rt1000_scan_next(146520000u, 12500u) == 146532500u, "Scan avanza un paso");
+    CHECK(rt1000_scan_next(174000000u, 12500u) == 136000000u, "Scan wrap VHF");
+    CHECK(rt1000_scan_next(480000000u, 25000u) == 400000000u, "Scan wrap UHF");
+    /* Tonos: CTCSS/DCS/DTMF */
+    CHECK(rt1000_ctcss_tone(0) == 670 && rt1000_ctcss_tone(47) == 2541, "CTCSS 67.0 y 254.1 Hz");
+    CHECK(rt1000_ctcss_tone(48) == 0, "CTCSS fuera de rango -> 0");
+    CHECK(rt1000_dcs_code(0) == 23 && rt1000_dcs_code(103) == 754, "DCS 023 y 754");
+    CHECK(rt1000_dcs_code(104) == 0, "DCS fuera de rango -> 0");
+    uint16_t fr_, fc_;
+    CHECK(rt1000_dtmf_freqs('1', &fr_, &fc_) && fr_ == 697 && fc_ == 1209, "DTMF 1 = 697/1209");
+    CHECK(rt1000_dtmf_freqs('0', &fr_, &fc_) && fr_ == 941 && fc_ == 1336, "DTMF 0 = 941/1336");
+    CHECK(!rt1000_dtmf_freqs('X', &fr_, &fc_), "DTMF tecla invalida");
+    /* Codificacion de tonos en settings/canales */
+    CHECK(rt1000_tone_encode_ctcss(0) == 1 && rt1000_tone_encode_ctcss(47) == 48, "Tono CTCSS encode 1..48");
+    CHECK(rt1000_tone_encode_dcs(0) == 49 && rt1000_tone_encode_dcs(103) == 152, "Tono DCS encode 49..152");
+    CHECK(rt1000_tone_encode_ctcss(48) == 0 && rt1000_tone_encode_dcs(104) == 0, "Tono encode fuera de rango -> 0");
+    CHECK(rt1000_tone_value(1) == 670 && rt1000_tone_value(48) == 2541, "Tono CTCSS valor Hz*10");
+    CHECK(rt1000_tone_value(49) == 23 && rt1000_tone_value(152) == 754, "Tono DCS valor codigo");
+    CHECK(rt1000_tone_is_dcs(49) && !rt1000_tone_is_dcs(48) && !rt1000_tone_is_dcs(0), "Tono DCS detectado");
+    {
+        char lab[16];
+        rt1000_tone_label(0, lab, sizeof lab); CHECK(strcmp(lab, "OFF") == 0, "Tono label OFF");
+        rt1000_tone_label(9, lab, sizeof lab); CHECK(strcmp(lab, "88.5") == 0, "Tono label 88.5");
+        rt1000_tone_label(49, lab, sizeof lab); CHECK(strcmp(lab, "DCS023") == 0, "Tono label DCS023");
+    }
+    /* BK4829: selecciones sin registro confirmado */
+    CHECK(bk4829_set_bandwidth(0, true) && bk4829_get_bandwidth_wide(0), "BK4829 bandwidth WIDE guardado");
+    CHECK(bk4829_set_vox(0, 5) && bk4829_get_vox(0) == 5, "BK4829 VOX nivel 5 guardado");
+    CHECK(!bk4829_set_vox(0, 10), "BK4829 VOX >9 rechazado");
+    CHECK(bk4829_set_tone_burst(0, true), "BK4829 tone burst 1750 guardado");
+    CHECK(bk4829_set_tones(0, 885, 885, 23, 23), "BK4829 tonos CTCSS/DCS guardados");
+    /* Flash 25Q + persistencia de ajustes y canales */
+    hal_spi_init();
+    uint32_t fsz = 0;
+    CHECK(flash25q_detect(&fsz) && fsz == 0x100000u, "Flash 25Q detectada 1 MiB (mock)");
+    CHECK(flash25q_user_base() == 0x100000u - 4096u, "Flash user base = ultimo sector");
+    rt1000_settings_t st; settings_defaults(&st);
+    rt1000_chan_t pch[16]; bool pused[16];
+    memset(pch, 0, sizeof pch); memset(pused, 0, sizeof pused);
+    pch[2].rx_hz = 146520000u; pch[2].tx_hz = 0xFFFFFFFFu;
+    snprintf(pch[2].name, sizeof pch[2].name, "CH-003"); pused[2] = true;
+    memcpy(st.callsign, "XE1ARS", 6);
+    memcpy(st.device_name, "RT-1000Pro", 10);
+    CHECK(persist_save(&st, pch, pused, 16), "Persist: guardado en flash");
+    rt1000_settings_t st2; rt1000_chan_t pch2[16]; bool pused2[16];
+    memset(&st2, 0, sizeof st2); memset(pch2, 0, sizeof pch2); memset(pused2, 0, sizeof pused2);
+    CHECK(persist_load(&st2, pch2, pused2, 16), "Persist: cargado con magic/checksum OK");
+    CHECK(memcmp(st2.callsign, "XE1ARS", 6) == 0 && st2.fm_freq_khz == 87900, "Persist: callsign y FM conservados");
+    CHECK(pused2[2] && pch2[2].rx_hz == 146520000u && strcmp(pch2[2].name, "CH-003") == 0, "Persist: canal 3 roundtrip");
+    CHECK(!pused2[0] && !pused2[1], "Persist: canales no usados en 0");
+    /* Corrupcion: un byte cambiado invalida el checksum */
+    {
+        uint8_t zero = 0x00;
+        uint32_t base = flash25q_user_base();
+        CHECK(flash25q_program(base + 10, &zero, 1), "Persist: byte corrompido en flash");
+        rt1000_settings_t st3; rt1000_chan_t pch3[16]; bool pused3[16];
+        CHECK(!persist_load(&st3, pch3, pused3, 16), "Persist: checksum invalido se rechaza");
+    }
+    /* UI: menu con scroll no crashea con 38 items */
+    {
+        const char *labels[38]; const char *values[38];
+        static char lab[38][8];
+        for(int i = 0; i < 38; i++){ snprintf(lab[i], 8, "Item%d", i); labels[i] = lab[i]; values[i] = "X"; }
+        lcd_init();
+        ui_menu(labels, values, 38, 37);
+        ui_menu(labels, values, 38, 0);
+        CHECK(1, "UI menu scroll 38 items (sin crash)");
+    }
     /* Bootloader RX end-to-end con el updater Python (mock):
      * 4x CONNECT, 1x UPDATE, 2 paquetes de datos, verificar flash+ACKs */
     hal_uart_init_115200(); hal_flash_erase_app();

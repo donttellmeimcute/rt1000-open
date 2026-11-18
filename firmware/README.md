@@ -34,26 +34,44 @@ display y el transceptor en el radio real.
     4× CONNECT → UPDATE → 246 paquetes, ACK/NAK, escritura a flash,
     rechazo de paquete corrupto. Probado contra paquetes generados
     con el mismo checksum que el updater Python.
-  - `nmea.c` — parser `$GPRMC` / `$GPGGA` con checksum XOR.
+  - `nmea.c` — parser `$GPRMC` / `$GPGGA` con checksum XOR;
+    extrae satélites (GGA), velocidad y rumbo (RMC).
   - `aprs.c` — frame AX.25 UI + position packet (callsign por
-    parámetro, no hardcodeado; AFSK/modulación es de hardware).
-  - `vfo.c` — modelo VFO, rangos RX y TX permitido (airband TX: no).
+    parámetro, no hardcodeado; AFSK/modulación es de hardware),
+    con path de digipeaters (WIDE1-1,WIDE2-1...) y FCS X.25.
+  - `vfo.c` — modelo VFO, rangos RX y TX permitido (airband TX: no),
+    cálculo TX con shift/offset/talkaround/reverse, canales NOAA
+    WX1-WX7 y avance de scan con wrap por banda.
+  - `tones.c` — CTCSS 48 tonos, DCS 104 códigos, DTMF
+    (frecuencias por tecla) y codificación de tono en settings.
+  - `storage.c` — canales BCD 32B, flash SPI 25Q (JEDEC, último
+    sector para nuestros datos) y persistencia de ajustes+canales
+    con magic y checksum XOR.
   - `ui.c` / `app.c` — UI completa (ST7789V 240x320): splash con
     callsign, pantalla principal con VFO A grande (3x) + VFO B,
-    S-meter del BK4829, barra de estado (callsign, RX/TX, GPS),
-    menu real de 11 items (VFO, paso, potencia, modo, squelch,
-    GPS, APRS, luz, tema, canales, info), pantalla GPS, canales en RAM
-    (16 slots, guardar/recuperar con ABC/OK) y entrada de
-    frecuencia por teclado (`*` es el punto decimal). Tema de color
-    en el menu (item "Tema"): KAWAII rosa claro por defecto
+    S-meter del BK4829, barra de estado (callsign, RX/TX, GPS,
+    MON, SCN), menu real de 38 items con scroll (VFO, paso,
+    potencia, modo, squelch, GPS, APRS, luz, tema, callsign,
+    nombre, scan, NOAA, radio FM, APRS SSID/path/detalle, DTMF,
+    MDC ID, VOX, ancho de banda, tone burst, CTCSS RX/TX, shift,
+    offset, talkaround, reverse, monitor, formato GPS, TNC, zona,
+    prioridad TX, multi standby, alarma, backup, reset, canales,
+    info), pantalla GPS (sats, velocidad, rumbo, 3 formatos),
+    canales en 4 zonas x 4 slots (guardar/recuperar con ABC/OK,
+    persistentes en flash), radio FM (SI4732, 87.5-108 MHz),
+    detalle APRS (FCS Check), editor de texto (callsign, nombre,
+    DTMF, MDC), alarma de emergencia y entrada de frecuencia por
+    teclado (`*` es el punto decimal). Tema de color en el menu
+    (item "Tema"): KAWAII rosa claro por defecto
     (`ui_set_theme(1)`), ORIGINAL negro/verde con L/R.
     El GPS ya se alimenta del parser NMEA con los bytes de UART.
     `make emu` renderiza todas las pantallas en `emu-out/`
     (incluye `09-principal-original.png` para comparar temas).
+    Inventario completo de funciones en `../docs/PORTED.md`.
 - `linker.ld` y `Makefile` para `arm-none-eabi-gcc`, Cortex-M4 Thumb.
-  `make test` usa solo gcc de host y pasa (27 checks); `make arm`
+  `make test` usa solo gcc de host y pasa (TODO OK); `make arm`
   compila con gcc-arm-none-eabi 15:13.2.rel1-2 y genera
-  `build/rt1000-open.hex` (47.312 bytes, SP 0x2000AEC8,
+  `build/rt1000-open.hex` (56.856 bytes, SP 0x2000AEC8,
   Reset 0x08002849), verificado con el updater
   (--verify-only / --dry-run, 246 paquetes OK).
   Builds de prueba de hardware en `hwtest/` (TEST=3 LCD,
@@ -69,10 +87,14 @@ display y el transceptor en el radio real.
 - **Chip de radio sin confirmar.** No hay ninguna cadena en el
   firmware que nombre el transceptor (BK4819, AT1846S, etc.).
   Hay que identificarlo por marcado / analizador lógico en SPI/I2C.
+  Los registros BK4829 de VOX, ancho de banda, tone burst y tonos
+  no están documentados en la referencia del RT-950: las
+  selecciones se guardan, pero su aplicación al chip está pendiente.
 - **Display, teclado, GPS, APRS, audio, SPI flash externa.**
-  Las cadenas del firmware V1.16 muestran menús de APRS, GPS,
-  DTMF, SSB/AM/FM, NOAA, etc., pero sus drivers y pines no están
-  mapeados todavía. Cada uno es un trabajo de RE por separado.
+  Los drivers están escritos con los candidatos del RT-950 Pro
+  adaptados al mapa del 1000Pro y probados en host; sus pines
+  reales no están mapeados todavía. El camino de audio (AFSK
+  para APRS, DTMF/MDC por DAC) no está confirmado.
 - **Bootloader de fábrica.** No está en el HEX extraído (empieza
   en `0x08002800`). No lo borres nunca: sin él no hay forma de
   recuperar el radio por serie.
@@ -93,10 +115,10 @@ completa y verificada.
 
 ```sh
 # Pruebas en host (sin toolchain ARM, lo verificable hoy)
-make test   # 21 checks: checksum, PLL, NMEA, APRS, VFO, bootloader RX
+make test   # TODO OK: checksum, PLL, NMEA, APRS+FCS, VFO, TX freq, NOAA, scan, tonos, flash persist, bootloader RX
 
 # Emulacion del display: renderiza las pantallas reales a PNG
-make emu    # -> emu-out/*.png (splash, principal, menu, GPS, canales...)
+make emu    # -> emu-out/*.png (splash, principal, menu, GPS, canales, FM, APRS, editor, alarma...)
 
 # Build ARM (requiere toolchain; instalacion pendiente de aprobacion)
 arm-none-eabi-gcc --version   # toolchain ARM Cortex-M

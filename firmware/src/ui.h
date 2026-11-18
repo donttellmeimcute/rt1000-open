@@ -39,8 +39,14 @@ typedef struct {
     int gps_h, gps_m, gps_s;
     double gps_lat, gps_lon, gps_alt_m;
     int gps_sats;
+    double speed_kmh, course;
     const char *callsign;
+    const char *device_name;
     const char *aprs_state; /* "OFF", "30s", "60s", "5min" */
+    bool monitor;        /* Monitor Mode: squelch abierto */
+    bool scan;           /* Scanning activo */
+    int batt_mv;         /* bateria en mV, 0 si sin ADC */
+    uint8_t gps_fmt;     /* 0 grado, 1 grado.min, 2 grado.min.seg */
 } ui_state_t;
 
 extern const char *UI_MODE_NAMES[5];
@@ -57,5 +63,10 @@ void ui_main(const ui_state_t *st);
 void ui_entry(const ui_state_t *st, const char *buffer);
 void ui_menu(const char *labels[], const char *values[], int count, int selected);
 void ui_gps_screen(const ui_state_t *st);
-void ui_chan_screen(const rt1000_chan_t *chans, const bool *used, int count, int selected);
-void ui_info_screen(const char *callsign, const char *version);
+void ui_chan_screen(const rt1000_chan_t *chans, const bool *used, int count, int selected, const char *zone_name);
+void ui_info_screen(const ui_state_t *st, const char *version);
+void ui_fm_screen(uint32_t freq_khz, bool present);
+void ui_aprs_screen(const char *callsign, uint8_t ssid, const char *path, const char *fcs);
+void ui_editor_screen(const char *title, const char *buffer, int cursor);
+void ui_alarm_screen(const char *callsign);
+void ui_msg_screen(const char *line1, const char *line2);

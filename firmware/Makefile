@@ -27,7 +27,7 @@ LDFLAGS  := -T linker.ld -nostartfiles -Wl,--gc-sections --specs=nosys.specs
 SRCS := src/main.c src/app.c src/hw_test.c src/bootloader_protocol.c \
         src/bootloader_rx.c src/clock.c src/nmea.c src/aprs.c src/vfo.c \
         src/display.c src/ui.c src/bk4829.c src/si4732.c src/keypad.c src/storage.c \
-        src/hal_mock.c src/hal_f4like.c src/uart_stub.c
+        src/tones.c src/hal_mock.c src/hal_f4like.c src/uart_stub.c
 OBJS := $(SRCS:.c=.o)
 
 all: arm
@@ -67,7 +67,8 @@ HOST_CC := gcc
 HOST_CFLAGS := -std=c11 -Wall -Wextra -Os -DRT1000_HOST_TEST=1 -Isrc
 HOST_SRCS := tests/host_test.c src/bootloader_protocol.c src/bootloader_rx.c \
              src/clock.c src/nmea.c src/aprs.c src/vfo.c src/hal_mock.c \
-             src/display.c src/bk4829.c src/si4732.c src/keypad.c src/storage.c
+             src/display.c src/bk4829.c src/si4732.c src/keypad.c src/storage.c \
+             src/tones.c src/ui.c
 test: build/host_test
 	./build/host_test
 

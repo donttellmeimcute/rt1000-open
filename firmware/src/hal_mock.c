@@ -25,8 +25,38 @@ int hal_uart_read_byte(uint8_t *out){
     *out=uart_rx[rx_head++%sizeof uart_rx]; return 0;
 }
 int hal_spi_init(void){ return 0; }
+/* Mock de flash SPI externa W25Q80 (1 MiB, JEDEC EF 40 14).
+ * Comandos: 0x9F JEDEC, 0x03 READ, 0x02 PAGE PROGRAM (AND,
+ * solo 1->0, max 256 B sin cruzar pagina), 0x20 SECTOR ERASE
+ * 4 KiB, 0x06 WRITE ENABLE. Sin WEL, program/erase se ignoran. */
+#define MOCK_EXT_FLASH_SIZE 0x100000u
+static uint8_t mock_ext_flash[MOCK_EXT_FLASH_SIZE];
+static bool ext_init, ext_wel;
 int hal_spi_transfer(const uint8_t *tx, uint8_t *rx, size_t len){
-    (void)tx; if(rx) memset(rx,0xFF,len); return 0; /* sin chip: devuelve 0xFF */
+    if(!ext_init){ memset(mock_ext_flash, 0xFF, sizeof mock_ext_flash); ext_init = true; }
+    if(!tx || len == 0){ if(rx) memset(rx, 0xFF, len); return 0; }
+    if(rx) memset(rx, 0xFF, len);
+    uint8_t cmd = tx[0];
+    if(cmd == 0x9F && len >= 4 && rx){ rx[1] = 0xEF; rx[2] = 0x40; rx[3] = 0x14; return 0; }
+    if(cmd == 0x06){ ext_wel = true; return 0; }
+    if(len < 4) return 0;
+    uint32_t addr = ((uint32_t)tx[1] << 16) | ((uint32_t)tx[2] << 8) | tx[3];
+    if(cmd == 0x03 && rx){
+        size_t n = len - 4;
+        if(addr + n > sizeof mock_ext_flash) n = sizeof mock_ext_flash - addr;
+        memcpy(rx + 4, mock_ext_flash + addr, n);
+    } else if(cmd == 0x02 && ext_wel){
+        size_t n = len - 4;
+        if(addr + n > sizeof mock_ext_flash) n = sizeof mock_ext_flash - addr;
+        for(size_t i = 0; i < n; i++) mock_ext_flash[addr + i] &= tx[4 + i];
+        ext_wel = false;
+    } else if(cmd == 0x20 && ext_wel){
+        uint32_t base = addr & ~(uint32_t)0xFFF;
+        if(base < sizeof mock_ext_flash)
+            memset(mock_ext_flash + base, 0xFF, 4096);
+        ext_wel = false;
+    }
+    return 0;
 }
 int hal_flash_erase_app(void){ memset(mock_flash,0xFF,sizeof mock_flash); return 0; }
 int hal_flash_write(uint32_t addr, const uint8_t *buf, size_t len){
@@ -35,4 +65,5 @@ int hal_flash_write(uint32_t addr, const uint8_t *buf, size_t len){
 }
 void hal_delay_ms(uint32_t ms){ (void)ms; }
 static uint32_t t; uint32_t hal_millis(void){ return ++t; }
+int hal_adc_batt_mv(void){ return 0; } /* sin ADC en host */
 #endif

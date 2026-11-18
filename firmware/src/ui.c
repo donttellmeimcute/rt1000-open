@@ -94,6 +94,8 @@ static void status_bar(const ui_state_t *st){
     }
     if(st->tx) lcd_text(100, 4, "TX", C_RED, C_FG);
     else lcd_text(100, 4, "RX", C_BG, C_FG);
+    if(st->monitor) lcd_text(120, 4, "MON", C_YLW, C_FG);
+    if(st->scan) lcd_text(120, 4, "SCN", C_YLW, C_FG);
 }
 
 void ui_splash(const char *callsign, const char *version){
@@ -156,34 +158,65 @@ void ui_menu(const char *labels[], const char *values[], int count, int selected
     lcd_fill(C_BG);
     lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
     lcd_text(4, 4, "MENU", C_BG, C_FG);
-    for(int i = 0; i < count; i++){
+    /* Ventana con scroll: 10 filas visibles de 24 px. */
+    int start = 0;
+    if(count > 10){
+        start = selected - 9;
+        if(start < 0) start = 0;
+        if(start > count - 10) start = count - 10;
+    }
+    int shown = count - start < 10 ? count - start : 10;
+    for(int i = 0; i < shown; i++){
+        int idx = start + i;
         uint16_t y = 24 + i * 24;
-        if(i == selected){
+        if(idx == selected){
             lcd_fill_rect(0, y, LCD_W, 22, C_FG);
-            lcd_text(8, y + 7, labels[i], C_BG, C_FG);
-            if(values[i]) lcd_text(150, y + 7, values[i], C_BG, C_FG);
+            lcd_text(8, y + 7, labels[idx], C_BG, C_FG);
+            if(values[idx]) lcd_text(150, y + 7, values[idx], C_BG, C_FG);
         } else {
-            lcd_text(8, y + 7, labels[i], C_FG, C_BG);
-            if(values[i]) lcd_text(150, y + 7, values[i], C_ACC, C_BG);
+            lcd_text(8, y + 7, labels[idx], C_FG, C_BG);
+            if(values[idx]) lcd_text(150, y + 7, values[idx], C_ACC, C_BG);
         }
     }
+    if(start > 0) lcd_text(224, 24, "^", C_GRY, C_BG);
+    if(start + shown < count) lcd_text(224, 264, "v", C_GRY, C_BG);
     lcd_text(4, 292, "UP/DOWN mueve  L/R cambia  OK entra", C_FG, C_BG);
 }
 
+static void fmt_coord(char *out, size_t n, double deg, bool lat, uint8_t fmt){
+    double a = deg < 0 ? -deg : deg;
+    char hemi = lat ? (deg < 0 ? 'S' : 'N') : (deg < 0 ? 'W' : 'E');
+    if(fmt == 1){
+        int d = (int)a; double m = (a - d) * 60.0;
+        snprintf(out, n, "%d %06.3f%c", d, m, hemi);
+    } else if(fmt == 2){
+        int d = (int)a; double mf = (a - d) * 60.0; int m = (int)mf;
+        double s = (mf - m) * 60.0;
+        snprintf(out, n, "%d %02d %04.1f%c", d, m, s, hemi);
+    } else {
+        snprintf(out, n, "%.4f %c", deg, hemi);
+    }
+}
+
 void ui_gps_screen(const ui_state_t *st){
-    char buf[40];
+    char buf[48];
     lcd_fill(C_BG);
     lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
     lcd_text(4, 4, "GPS", C_BG, C_FG);
     if(st->gps_fix){
         snprintf(buf, sizeof buf, "%02d:%02d:%02d", st->gps_h, st->gps_m, st->gps_s);
         ui_text_scaled(8, 32, buf, 3, C_FG, C_BG);
-        snprintf(buf, sizeof buf, "LAT %.4f", st->gps_lat);
+        char c[24];
+        fmt_coord(c, sizeof c, st->gps_lat, true, st->gps_fmt);
+        snprintf(buf, sizeof buf, "LAT %s", c);
         ui_text_scaled(8, 80, buf, 2, C_ACC, C_BG);
-        snprintf(buf, sizeof buf, "LON %.4f", st->gps_lon);
+        fmt_coord(c, sizeof c, st->gps_lon, false, st->gps_fmt);
+        snprintf(buf, sizeof buf, "LON %s", c);
         ui_text_scaled(8, 108, buf, 2, C_ACC, C_BG);
         snprintf(buf, sizeof buf, "ALT %.0f m  SAT %d", st->gps_alt_m, st->gps_sats);
         lcd_text(8, 140, buf, C_FG, C_BG);
+        snprintf(buf, sizeof buf, "VEL %.0f km/h  RUMBO %03.0f", st->speed_kmh, st->course);
+        lcd_text(8, 156, buf, C_FG, C_BG);
     } else {
         ui_text_scaled(8, 32, "SIN FIX", 3, C_RED, C_BG);
         lcd_text(8, 80, "Buscando satelites...", C_FG, C_BG);
@@ -195,11 +228,12 @@ void ui_gps_screen(const ui_state_t *st){
     lcd_text(4, 292, "BACK vuelve", C_FG, C_BG);
 }
 
-void ui_chan_screen(const rt1000_chan_t *chans, const bool *used, int count, int selected){
-    char buf[40];
+void ui_chan_screen(const rt1000_chan_t *chans, const bool *used, int count, int selected, const char *zone_name){
+    char buf[48];
     lcd_fill(C_BG);
     lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
-    lcd_text(4, 4, "CANALES", C_BG, C_FG);
+    snprintf(buf, sizeof buf, "CANALES %s", zone_name ? zone_name : "");
+    lcd_text(4, 4, buf, C_BG, C_FG);
     int shown = count < 8 ? count : 8;
     for(int i = 0; i < shown; i++){
         uint16_t y = 24 + i * 28;
@@ -220,18 +254,92 @@ void ui_chan_screen(const rt1000_chan_t *chans, const bool *used, int count, int
     lcd_text(4, 292, "OK recupera  ABC guarda  BACK sale", C_FG, C_BG);
 }
 
-void ui_info_screen(const char *callsign, const char *version){
+void ui_info_screen(const ui_state_t *st, const char *version){
     lcd_fill(C_BG);
     lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
     lcd_text(4, 4, "INFO", C_BG, C_FG);
-    char buf[40];
+    char buf[48];
     snprintf(buf, sizeof buf, "RT-1000Pro open %s", version);
     lcd_text(8, 32, buf, C_FG, C_BG);
-    snprintf(buf, sizeof buf, "Callsign: %s", callsign);
-    lcd_text(8, 56, buf, C_ACC, C_BG);
-    lcd_text(8, 88, "HW: SIN CONFIRMAR", C_RED, C_BG);
-    lcd_text(8, 104, "MCU ?  BK4829 ?  LCD ?", C_GRY, C_BG);
-    lcd_text(8, 136, "Flashear tests 3 y 4", C_FG, C_BG);
-    lcd_text(8, 152, "antes que la app.", C_FG, C_BG);
+    snprintf(buf, sizeof buf, "Callsign: %s", st->callsign);
+    lcd_text(8, 48, buf, C_ACC, C_BG);
+    snprintf(buf, sizeof buf, "Nombre: %s", st->device_name);
+    lcd_text(8, 64, buf, C_FG, C_BG);
+    if(st->batt_mv > 0)
+        snprintf(buf, sizeof buf, "BATT: %.1fV", st->batt_mv / 1000.0);
+    else
+        snprintf(buf, sizeof buf, "BATT: --.-V (ADC sin conf.)");
+    lcd_text(8, 80, buf, C_FG, C_BG);
+    lcd_text(8, 104, "HW: SIN CONFIRMAR", C_RED, C_BG);
+    lcd_text(8, 120, "MCU ?  BK4829 ?  LCD ?", C_GRY, C_BG);
+    lcd_text(8, 152, "Flashear tests 3 y 4", C_FG, C_BG);
+    lcd_text(8, 168, "antes que la app.", C_FG, C_BG);
     lcd_text(4, 292, "BACK vuelve", C_FG, C_BG);
+}
+
+void ui_fm_screen(uint32_t freq_khz, bool present){
+    char buf[48];
+    lcd_fill(C_BG);
+    lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
+    lcd_text(4, 4, "RADIO FM", C_BG, C_FG);
+    snprintf(buf, sizeof buf, "%lu.%02lu MHz", (unsigned long)(freq_khz / 1000),
+             (unsigned long)((freq_khz % 1000) / 10));
+    ui_text_scaled(8, 48, buf, 3, C_FG, C_BG);
+    snprintf(buf, sizeof buf, "SI4732: %s", present ? "detectado" : "no detectado");
+    lcd_text(8, 104, buf, present ? C_FG : C_RED, C_BG);
+    lcd_text(8, 136, "FM broadcast 87.5-108", C_GRY, C_BG);
+    lcd_text(4, 292, "UP/DOWN sintonia  BACK sale", C_FG, C_BG);
+}
+
+void ui_aprs_screen(const char *callsign, uint8_t ssid, const char *path, const char *fcs){
+    char buf[48];
+    lcd_fill(C_BG);
+    lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
+    lcd_text(4, 4, "APRS DETALLE", C_BG, C_FG);
+    snprintf(buf, sizeof buf, "%s-%d", callsign, (int)ssid);
+    ui_text_scaled(8, 32, buf, 2, C_ACC, C_BG);
+    snprintf(buf, sizeof buf, "Path: %s", path);
+    lcd_text(8, 80, buf, C_FG, C_BG);
+    snprintf(buf, sizeof buf, "FCS Check: %s", fcs);
+    lcd_text(8, 104, buf, C_FG, C_BG);
+    lcd_text(8, 136, "Call Locate: GPS -> APRS", C_FG, C_BG);
+    lcd_text(8, 160, "Simbolo: radioaficionado", C_GRY, C_BG);
+    lcd_text(8, 192, "APRS TX por AFSK: pendiente", C_GRY, C_BG);
+    lcd_text(4, 292, "BACK vuelve", C_FG, C_BG);
+}
+
+void ui_editor_screen(const char *title, const char *buffer, int cursor){
+    lcd_fill(C_BG);
+    lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
+    lcd_text(4, 4, title, C_BG, C_FG);
+    char buf[24];
+    snprintf(buf, sizeof buf, "%s", buffer);
+    ui_text_scaled(16, 96, buf, 2, C_FG, C_BG);
+    /* Subrayado bajo el caracter del cursor (cada char 12 px a 2x). */
+    lcd_fill_rect(16 + cursor * 12, 124, 10, 3, C_ACC);
+    lcd_text(8, 168, "UP/DOWN cambia letra", C_FG, C_BG);
+    lcd_text(8, 184, "L/R mueve cursor", C_FG, C_BG);
+    lcd_text(4, 292, "OK guarda  BACK cancela", C_FG, C_BG);
+}
+
+void ui_alarm_screen(const char *callsign){
+    char buf[48];
+    lcd_fill(C_BG);
+    lcd_fill_rect(0, 0, LCD_W, 16, C_RED);
+    lcd_text(4, 4, "ALARMA", LCD_WHITE, C_RED);
+    ui_text_scaled(8, 48, "EMERGENCIA", 2, C_RED, C_BG);
+    snprintf(buf, sizeof buf, "%s pide ayuda", callsign);
+    lcd_text(8, 96, buf, C_FG, C_BG);
+    lcd_text(8, 128, "TX tono de alarma", C_FG, C_BG);
+    lcd_text(8, 152, "APRS: ! Emergency", C_GRY, C_BG);
+    lcd_text(4, 292, "Cualquier tecla para", C_FG, C_BG);
+}
+
+void ui_msg_screen(const char *line1, const char *line2){
+    lcd_fill(C_BG);
+    lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
+    lcd_text(4, 4, "MENSAJE", C_BG, C_FG);
+    if(line1) ui_text_scaled(8, 80, line1, 2, C_FG, C_BG);
+    if(line2) lcd_text(8, 128, line2, C_GRY, C_BG);
+    lcd_text(4, 292, "OK confirma  BACK cancela", C_FG, C_BG);
 }

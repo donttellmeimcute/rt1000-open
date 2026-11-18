@@ -104,3 +104,35 @@ int16_t bk4829_rssi_dbm(uint8_t chip){
 void bk4829_tx_enable(uint8_t chip, bool on){
     bk_write(chip, BK_REG_MODE, on ? 0xC1FE : 0xBFF1);
 }
+
+/* Selecciones de funciones sin registro confirmado (ver .h).
+ * Se guardan por chip para que la UI y los tests sean
+ * coherentes; NO se escribe ningun registro inventado. */
+static bool cfg_wide[2];
+static uint8_t cfg_vox[2];
+static bool cfg_burst[2];
+static uint16_t cfg_rx_ctcss[2], cfg_tx_ctcss[2], cfg_rx_dcs[2], cfg_tx_dcs[2];
+bool bk4829_set_bandwidth(uint8_t chip, bool wide){
+    if(chip > 1) return false;
+    cfg_wide[chip] = wide; return true;
+}
+bool bk4829_get_bandwidth_wide(uint8_t chip){
+    return chip <= 1 ? cfg_wide[chip] : false;
+}
+bool bk4829_set_vox(uint8_t chip, uint8_t level){
+    if(chip > 1 || level > 9) return false;
+    cfg_vox[chip] = level; return true;
+}
+uint8_t bk4829_get_vox(uint8_t chip){
+    return chip <= 1 ? cfg_vox[chip] : 0;
+}
+bool bk4829_set_tone_burst(uint8_t chip, bool on_1750hz){
+    if(chip > 1) return false;
+    cfg_burst[chip] = on_1750hz; return true;
+}
+bool bk4829_set_tones(uint8_t chip, uint16_t rx_ctcss_x10, uint16_t tx_ctcss_x10,
+                      uint16_t rx_dcs, uint16_t tx_dcs){
+    if(chip > 1) return false;
+    cfg_rx_ctcss[chip] = rx_ctcss_x10; cfg_tx_ctcss[chip] = tx_ctcss_x10;
+    cfg_rx_dcs[chip] = rx_dcs; cfg_tx_dcs[chip] = tx_dcs; return true;
+}

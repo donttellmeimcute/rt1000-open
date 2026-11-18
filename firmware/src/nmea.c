@@ -15,7 +15,9 @@ bool rt1000_nmea_parse(const char *s, rt1000_gps_t *out){
     if(!s||s[0]!='$') return false;
     const char *star=strchr(s,'*'); if(!star||hexv(star[1])<0||hexv(star[2])<0) return false;
     if(rt1000_nmea_checksum(s)!=(uint8_t)(hexv(star[1])*16+hexv(star[2]))) return false;
+    int sats_keep = out->sats; /* RMC no trae sats: se conserva el ultimo GGA */
     memset(out,0,sizeof *out);
+    out->sats = sats_keep;
     char buf[160]; size_t n=star-s; if(n>=sizeof buf) return false;
     memcpy(buf,s,n); buf[n]=0;
     char *f[16]; int nf=0; char *save=NULL;
@@ -38,6 +40,7 @@ bool rt1000_nmea_parse(const char *s, rt1000_gps_t *out){
         if(f[6][0]=='0') return false;
         out->fix=true;
         out->lat=ddmm_to_deg(f[2],f[3][0]); out->lon=ddmm_to_deg(f[4],f[5][0]);
+        out->sats=atoi(f[7]); /* campo 7: satelites en uso */
         out->alt_m=atof(f[9]); out->valid=true; return true;
     }
     return false;

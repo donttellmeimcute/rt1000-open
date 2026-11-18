@@ -9,6 +9,7 @@
 typedef struct {
     bool valid, fix; double lat, lon; double speed_kmh, course;
     int hour, min, sec; int day, month, year; double alt_m;
+    int sats; /* de $GPGGA campo 7; se conserva entre sentencias */
 } rt1000_gps_t;
 uint8_t rt1000_nmea_checksum(const char *s); /* XOR entre '$' y '*' */
 bool rt1000_nmea_parse(const char *sentence, rt1000_gps_t *out);

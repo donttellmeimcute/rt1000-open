@@ -83,6 +83,11 @@ void hal_delay_ms(uint32_t ms){
     /* SysTick a 120 MHz: 120000 ciclos por ms. */
     for(uint32_t i=0;i<ms;i++) for(volatile uint32_t j=0;j<120000;j++){ }
 }
+int hal_adc_batt_mv(void){
+    /* ADC1 existe en V1.16 (IRQ 18), pero el canal del divisor
+     * de bateria no esta confirmado: devolver 0 hasta TEST=7. */
+    return 0;
+}
 static volatile uint32_t tick_ms;
 uint32_t hal_millis(void){ return tick_ms; }
 void SysTick_Handler(void){ tick_ms++; }

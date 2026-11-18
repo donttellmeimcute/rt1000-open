@@ -47,8 +47,13 @@ static void demo_state(ui_state_t *s, int gps_fix, int16_t rssi){
     s->gps_h = 9; s->gps_m = 30; s->gps_s = 0;
     s->gps_lat = 19.5145; s->gps_lon = -98.8756;
     s->gps_alt_m = 2250; s->gps_sats = 8;
+    s->speed_kmh = 41.5; s->course = 84.4;
+    s->gps_fmt = 0;
     s->callsign = "XE1ARS";
+    s->device_name = "RT-1000Pro";
     s->aprs_state = "60s";
+    s->monitor = false; s->scan = false;
+    s->batt_mv = 0; /* sin ADC en host */
 }
 
 int main(void){
@@ -87,15 +92,31 @@ int main(void){
     ui_main(&st);
     dump_ppm("emu-out/04-principal-gps.ppm");
 
-    /* 5: menu (seleccion en "Paso"). Tema KAWAII por defecto. */
+    /* 5: menu (seleccion en "Tema"). Tema KAWAII por defecto. */
     {
         static const char *labels[] = {
             "VFO activo", "Paso", "Potencia", "Modo", "Squelch",
-            "GPS", "APRS beacon", "Luz pantalla", "Tema", "Canales", "Info"};
+            "GPS", "APRS beacon", "Luz pantalla", "Tema",
+            "Callsign", "Nombre", "Scan", "NOAA CH", "Radio FM",
+            "APRS SSID", "APRS Path", "APRS detalle",
+            "DTMF", "MDC ID", "VOX", "Ancho banda", "Tone Burst",
+            "CTCSS RX", "CTCSS TX",
+            "Shift", "Offset", "Talkaround", "Reverse",
+            "Monitor", "GPS formato", "TNC", "Zona",
+            "Prioridad TX", "Multi standby",
+            "Alarma", "Backup", "Reset", "Canales", "Info"};
         static const char *values[] = {
             "A", "12.5k", "ALTA", "FM", "2",
-            "ON", "60s", "ON", "KAWAII", ">", ">"};
-        ui_menu(labels, values, 11, 1);
+            "ON", "60s", "ON", "KAWAII",
+            "XE1ARS", "RT-1000Pro", ">", "OFF", ">",
+            "0", "WIDE1-1,WIDE2-1", ">",
+            "1234", "0001", "OFF", "NARROW", "OFF",
+            "OFF", "OFF",
+            "0", "600k", "OFF", "OFF",
+            "OFF", "GRADO", "OFF", "ZONA 1",
+            "OFF", "OFF",
+            ">", ">", ">", ">", ">"};
+        ui_menu(labels, values, 38, 8);
         dump_ppm("emu-out/05-menu.ppm");
     }
 
@@ -104,7 +125,7 @@ int main(void){
     ui_gps_screen(&st);
     dump_ppm("emu-out/06-gps.ppm");
 
-    /* 7: canales (2 demo). */
+    /* 7: canales (2 demo, zona 1). */
     {
         rt1000_chan_t chans[16];
         bool used[16] = {0};
@@ -112,7 +133,7 @@ int main(void){
         chans[0].rx_hz = 146520000u; snprintf(chans[0].name, 12, "CH-001");
         chans[1].rx_hz = 435000000u; snprintf(chans[1].name, 12, "CH-002");
         used[0] = used[1] = true;
-        ui_chan_screen(chans, used, 16, 0);
+        ui_chan_screen(chans, used, 4, 0, "ZONA 1");
         dump_ppm("emu-out/07-canales.ppm");
     }
 
@@ -127,6 +148,55 @@ int main(void){
     ui_main(&st);
     dump_ppm("emu-out/09-principal-original.ppm");
     ui_set_theme(1);
+
+    /* 10: radio FM (SI4732). */
+    ui_fm_screen(87900, true);
+    dump_ppm("emu-out/10-fm.ppm");
+
+    /* 11: detalle APRS. */
+    ui_aprs_screen("XE1ARS", 0, "WIDE1-1,WIDE2-1", "Success");
+    dump_ppm("emu-out/11-aprs.ppm");
+
+    /* 12: editor de callsign. */
+    ui_editor_screen("CALLSIGN", "XE1ARS", 2);
+    dump_ppm("emu-out/12-editor.ppm");
+
+    /* 13: alarma de emergencia. */
+    ui_alarm_screen("XE1ARS");
+    dump_ppm("emu-out/13-alarma.ppm");
+
+    /* 14: info (bateria sin ADC en host). */
+    demo_state(&st, 1, -73);
+    ui_info_screen(&st, "v1.0-open");
+    dump_ppm("emu-out/14-info.ppm");
+
+    /* 15: menu con scroll (seleccion abajo, item 30). */
+    {
+        static const char *labels[] = {
+            "VFO activo", "Paso", "Potencia", "Modo", "Squelch",
+            "GPS", "APRS beacon", "Luz pantalla", "Tema",
+            "Callsign", "Nombre", "Scan", "NOAA CH", "Radio FM",
+            "APRS SSID", "APRS Path", "APRS detalle",
+            "DTMF", "MDC ID", "VOX", "Ancho banda", "Tone Burst",
+            "CTCSS RX", "CTCSS TX",
+            "Shift", "Offset", "Talkaround", "Reverse",
+            "Monitor", "GPS formato", "TNC", "Zona",
+            "Prioridad TX", "Multi standby",
+            "Alarma", "Backup", "Reset", "Canales", "Info"};
+        static const char *values[] = {
+            "A", "12.5k", "ALTA", "FM", "2",
+            "ON", "60s", "ON", "KAWAII",
+            "XE1ARS", "RT-1000Pro", ">", "OFF", ">",
+            "0", "WIDE1-1,WIDE2-1", ">",
+            "1234", "0001", "OFF", "NARROW", "OFF",
+            "OFF", "OFF",
+            "0", "600k", "OFF", "OFF",
+            "OFF", "GRADO", "OFF", "ZONA 1",
+            "OFF", "OFF",
+            ">", ">", ">", ">", ">"};
+        ui_menu(labels, values, 38, 30);
+        dump_ppm("emu-out/15-menu-scroll.ppm");
+    }
 
     return 0;
 }

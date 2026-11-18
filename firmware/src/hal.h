@@ -43,3 +43,8 @@ int hal_flash_write(uint32_t addr, const uint8_t *buf, size_t len);
 /* Tiempo */
 void hal_delay_ms(uint32_t ms);
 uint32_t hal_millis(void);
+
+/* ADC bateria (ADC1, V1.16 lo referencia; el canal exacto del
+ * divisor de bateria NO esta confirmado). En host devuelve 0
+ * (sin bateria); en ARM devuelve 0 hasta confirmar el canal. */
+int hal_adc_batt_mv(void);

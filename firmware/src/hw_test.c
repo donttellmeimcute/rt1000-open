@@ -4,6 +4,7 @@
 #include "bk4829.h"
 #include "si4732.h"
 #include "keypad.h"
+#include "storage.h"
 #include <stdio.h>
 /* Modo de prueba de hardware, como el de Hertzz58 para el RT-950 Pro.
  * Se flashea ANTES que la app completa: cada test confirma un
@@ -30,8 +31,10 @@ int hw_test_main(int test){
         uint8_t rev[9]; bool ok=si4732_get_rev(rev);
         snprintf(buf,sizeof buf,"TEST 5: SI4732 rev %s\r\n", ok?"OK":"FAIL"); dbg(buf); break; }
     case 6: {
-        uint8_t id[3]={0}; hal_spi_transfer((const uint8_t[]){0x9F}, id, 3);
-        snprintf(buf,sizeof buf,"TEST 6: flash JEDEC %02X %02X %02X\r\n", id[0],id[1],id[2]); dbg(buf); break; }
+        uint32_t sz = 0; bool ok = flash25q_detect(&sz);
+        snprintf(buf, sizeof buf, "TEST 6: flash 25Q %s %lu bytes\r\n",
+                 ok ? "OK" : "FAIL", (unsigned long)sz);
+        dbg(buf); break; }
     case 9: {
         uint16_t raw=keypad_scan_raw();
         snprintf(buf,sizeof buf,"TEST 9: keypad raw=%04X\r\n", raw); dbg(buf); break; }
