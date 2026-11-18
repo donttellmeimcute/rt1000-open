@@ -41,16 +41,19 @@ display y el transceptor en el radio real.
   - `ui.c` / `app.c` — UI completa (ST7789V 240x320): splash con
     callsign, pantalla principal con VFO A grande (3x) + VFO B,
     S-meter del BK4829, barra de estado (callsign, RX/TX, GPS),
-    menu real de 10 items (VFO, paso, potencia, modo, squelch,
-    GPS, APRS, luz, canales, info), pantalla GPS, canales en RAM
+    menu real de 11 items (VFO, paso, potencia, modo, squelch,
+    GPS, APRS, luz, tema, canales, info), pantalla GPS, canales en RAM
     (16 slots, guardar/recuperar con ABC/OK) y entrada de
-    frecuencia por teclado (`*` es el punto decimal). El GPS ya
-    se alimenta del parser NMEA con los bytes de UART.
-    `make emu` renderiza todas las pantallas en `emu-out/`.
+    frecuencia por teclado (`*` es el punto decimal). Tema de color
+    en el menu (item "Tema"): KAWAII rosa claro por defecto
+    (`ui_set_theme(1)`), ORIGINAL negro/verde con L/R.
+    El GPS ya se alimenta del parser NMEA con los bytes de UART.
+    `make emu` renderiza todas las pantallas en `emu-out/`
+    (incluye `09-principal-original.png` para comparar temas).
 - `linker.ld` y `Makefile` para `arm-none-eabi-gcc`, Cortex-M4 Thumb.
   `make test` usa solo gcc de host y pasa (27 checks); `make arm`
   compila con gcc-arm-none-eabi 15:13.2.rel1-2 y genera
-  `build/rt1000-open.hex` (46.928 bytes, SP 0x2000AEC8,
+  `build/rt1000-open.hex` (47.312 bytes, SP 0x2000AEC8,
   Reset 0x08002849), verificado con el updater
   (--verify-only / --dry-run, 246 paquetes OK).
   Builds de prueba de hardware en `hwtest/` (TEST=3 LCD,

@@ -87,15 +87,15 @@ int main(void){
     ui_main(&st);
     dump_ppm("emu-out/04-principal-gps.ppm");
 
-    /* 5: menu (seleccion en "Paso"). */
+    /* 5: menu (seleccion en "Paso"). Tema KAWAII por defecto. */
     {
         static const char *labels[] = {
             "VFO activo", "Paso", "Potencia", "Modo", "Squelch",
-            "GPS", "APRS beacon", "Luz pantalla", "Canales", "Info"};
+            "GPS", "APRS beacon", "Luz pantalla", "Tema", "Canales", "Info"};
         static const char *values[] = {
             "A", "12.5k", "ALTA", "FM", "2",
-            "ON", "60s", "ON", ">", ">"};
-        ui_menu(labels, values, 10, 1);
+            "ON", "60s", "ON", "KAWAII", ">", ">"};
+        ui_menu(labels, values, 11, 1);
         dump_ppm("emu-out/05-menu.ppm");
     }
 
@@ -120,6 +120,13 @@ int main(void){
     demo_state(&st, 0, -87);
     ui_entry(&st, "146.53");
     dump_ppm("emu-out/08-entry.ppm");
+
+    /* 9: principal con el tema ORIGINAL (para comparar con KAWAII). */
+    ui_set_theme(0);
+    demo_state(&st, 0, -87);
+    ui_main(&st);
+    dump_ppm("emu-out/09-principal-original.ppm");
+    ui_set_theme(1);
 
     return 0;
 }

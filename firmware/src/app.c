@@ -152,8 +152,8 @@ static void draw_all(void){
     case ST_MENU: {
         static const char *labels[] = {
             "VFO activo", "Paso", "Potencia", "Modo", "Squelch",
-            "GPS", "APRS beacon", "Luz pantalla", "Canales", "Info"};
-        char v0[8], v1[12], v2[8], v3[8], v4[8], v5[8], v6[8], v7[8];
+            "GPS", "APRS beacon", "Luz pantalla", "Tema", "Canales", "Info"};
+        char v0[8], v1[12], v2[8], v3[8], v4[8], v5[8], v6[8], v7[8], v8[10];
         snprintf(v0, sizeof v0, "%s", ctx.active == 0 ? "A" : "B");
         snprintf(v1, sizeof v1, "%lu.%01luk",
                  (unsigned long)(STEPS[ctx.step_idx] / 1000),
@@ -164,8 +164,9 @@ static void draw_all(void){
         snprintf(v5, sizeof v5, "%s", ctx.gps_on ? "ON" : "OFF");
         snprintf(v6, sizeof v6, "%s", APRS_OPTS[ctx.aprs_idx]);
         snprintf(v7, sizeof v7, "%s", ctx.backlight ? "ON" : "OFF");
-        const char *values[] = {v0, v1, v2, v3, v4, v5, v6, v7, ">", ">"};
-        ui_menu(labels, values, 10, menu_sel);
+        snprintf(v8, sizeof v8, "%s", ui_theme_name());
+        const char *values[] = {v0, v1, v2, v3, v4, v5, v6, v7, v8, ">", ">"};
+        ui_menu(labels, values, 11, menu_sel);
         break;
     }
     }
@@ -187,6 +188,7 @@ static void menu_change(int dir){
     case 5: ctx.gps_on = !ctx.gps_on; break;
     case 6: ctx.aprs_idx = (ctx.aprs_idx + dir + 4) % 4; break;
     case 7: ctx.backlight = !ctx.backlight; break;
+    case 8: ui_set_theme(!ui_get_theme()); break; /* Tema: KAWAII/ORIGINAL */
     default: break;
     }
 }
@@ -240,13 +242,13 @@ static void handle_key(int key){
         }
         break;
     case ST_MENU:
-        if(key == K_UP) menu_sel = (menu_sel + 9) % 10;
-        else if(key == K_DOWN) menu_sel = (menu_sel + 1) % 10;
+        if(key == K_UP) menu_sel = (menu_sel + 10) % 11;
+        else if(key == K_DOWN) menu_sel = (menu_sel + 1) % 11;
         else if(key == K_LEFT) menu_change(-1);
         else if(key == K_RIGHT) menu_change(1);
         else if(key == K_OK){
-            if(menu_sel == 8){ chan_sel = 0; state = ST_CHAN; }
-            else if(menu_sel == 9){ state = ST_INFO; }
+            if(menu_sel == 9){ chan_sel = 0; state = ST_CHAN; }
+            else if(menu_sel == 10){ state = ST_INFO; }
         }
         else if(key == K_BACK) state = ST_MAIN;
         break;

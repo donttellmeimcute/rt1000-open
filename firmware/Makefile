@@ -44,12 +44,14 @@ build/$(TARGET).hex: build/$(TARGET).elf
 	$(OBJCOPY) -O ihex $< $@
 
 # El build de prueba recompila main.o con otro define, asi que
-# limpia los objetos; al final reconstruye la app para no
-# borrar build/rt1000-open.hex.
+# limpia los objetos; al final guarda el .hex de prueba en hwtest/
+# y reconstruye la app desde cero (sin el define) para que
+# build/rt1000-open.hex vuelva a ser la app y no el test.
 test-hw: CFLAGS += -DRT1000_HW_TEST=$(TEST)
 test-hw: clean build/$(TARGET)-hwtest-$(TEST).hex
-	@$(MAKE) --no-print-directory arm >/dev/null
-	@echo "Build de prueba TEST=$(TEST) listo: build/$(TARGET)-hwtest-$(TEST).hex"
+	@mkdir -p hwtest && cp build/$(TARGET)-hwtest-$(TEST).hex hwtest/
+	@$(MAKE) --no-print-directory clean arm >/dev/null
+	@echo "Build de prueba TEST=$(TEST) listo: hwtest/$(TARGET)-hwtest-$(TEST).hex"
 
 build/$(TARGET)-hwtest-%.hex: build/$(TARGET).elf
 	$(OBJCOPY) -O ihex $< $@

@@ -15,6 +15,17 @@
 #define UI_YELLOW 0xFFE0
 #define UI_CYAN   0x07FF
 
+/* Temas de color de la UI. La paleta activa la elige ui_set_theme();
+ * por defecto es KAWAII (rosa claro). ORIGINAL es el look negro/verde.
+ * Los campos son: fondo, texto, acento, cian, gris, oscuro, amarillo, rojo. */
+typedef struct {
+    uint16_t bg, fg, acc, cyn, gry, drk, ylw, red;
+} ui_palette_t;
+extern const ui_palette_t UI_PAL_ORIG, UI_PAL_KAWAII;
+void ui_set_theme(int theme); /* 0 = ORIGINAL, 1 = KAWAII */
+int ui_get_theme(void);
+const char *ui_theme_name(void);
+
 typedef struct {
     uint32_t vfo_a_hz, vfo_b_hz;
     uint8_t active;      /* 0=A, 1=B */
