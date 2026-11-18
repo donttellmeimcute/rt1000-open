@@ -53,6 +53,7 @@ typedef struct {
     uint16_t scan_interval_ms; uint32_t fm_freq_khz;
     uint16_t tone_rx, tone_tx; /* codificacion rt1000_tone_*: 0=OFF */
     uint8_t modem; /* 0=OFF, 1=DMR, 2=NXDN, 3=P25 (nodo MMDVM, ver docs/DMR-CONVERSION.md) */
+    uint8_t apo_idx; /* APO: 0=OFF, 1=15, 2=30, 3=60, 4=120 min (ver apo.h) */
     char zone_names[4][13];
 } rt1000_settings_t;
 void settings_defaults(rt1000_settings_t *s);

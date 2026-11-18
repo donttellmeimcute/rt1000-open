@@ -45,6 +45,7 @@ del pin en el radio real antes de darse por válido.
 | Callsign (editor) | Portado (editor, 6 caracteres A-Z0-9) |
 | BATT:0.0V | Pantalla Info (ADC sin confirmar, muestra --.-V) |
 | Tema rosa KAWAII / ORIGINAL | Portado (menú Tema, default KAWAII) |
+| APO (Auto Power Off) | Portado (`apo.c`, menú "APO (auto off)" OFF/15/30/60/120 min, ajuste persistente en flash): inactividad = sin tecla, sin señal RX por encima del squelch y sin beacon APRS; 10 s antes muestra "Power Off!" (mensaje del V1.16) con cuenta atrás, cualquier tecla o señal lo cancela; al vencer guarda ajustes, pone el BK4829 en standby, apaga el LCD y duerme el MCU con WFI. La alarma de emergencia inhibe el APO. Default OFF. Los minutos son elección nuestra: el V1.16 solo trae los nombres "APO" y "APO Timer", no los valores. |
 | Detección flash 25Q80-25Q512 | Portado (`flash25q_detect`, TEST 6) |
 
 ## Pendiente de hardware (no afirmable sin el radio)
@@ -55,6 +56,7 @@ del pin en el radio real antes de darse por válido.
 | DTMF/MDC TX por audio | Igual que APRS: falta el camino de audio. |
 | VOX / Wide-Narrow / Tone Burst / CTCSS al chip | Las selecciones se guardan y se muestran, pero los registros BK4829 exactos no están documentados en la referencia del RT-950. TEST 4 + analizador lógico. |
 | Batería real | ADC1 existe en V1.16 (IRQ 18), pero el canal del divisor no está confirmado. TEST 7. |
+| Corte físico de alimentación por APO | El pin de latch de energía no está confirmado en V1.16: el apagado APO es sueño del MCU (WFI con interrupciones apagadas, BK en standby, LCD apagado), no un corte de alimentación. Solo un reset / ciclo de energía lo despierta. Si el latch se identifica por hardware, `hal_power_off()` es el punto donde va. |
 | SI4732 real | Driver listo; presencia por confirmar con TEST 5. |
 | Flash 25Q real | Driver listo (último sector); tamaño por confirmar con TEST 6. |
 | Frecuencia BK4829 (PLL 10 Hz) | El cálculo depende del cristal de referencia, sin confirmar. |
@@ -74,7 +76,7 @@ del pin en el radio real antes de darse por válido.
 
 ## Cómo se verifica
 
-- `make test` — lógica en host (NMEA, APRS+FCS, TX freq, NOAA, scan, tonos, persistencia con flash mock, menú con scroll).
+- `make test` — lógica en host (NMEA, APRS+FCS, TX freq, NOAA, scan, tonos, persistencia con flash mock, menú con scroll, APO con wrap de `hal_millis()`).
 - `make emu` — 17 pantallas renderizadas con el driver LCD real en `firmware/emu-out/`.
 - `make arm` + `updater --verify-only` + `--dry-run` — .hex válido (246 paquetes).
 - Antes de flashear la app: `make test-hw TEST=3` (LCD) y `TEST=4` (BK4829). Ver `docs/FLASHING.md`.

@@ -346,6 +346,20 @@ void ui_msg_screen(const char *line1, const char *line2){
     lcd_text(4, 292, "OK confirma  BACK cancela", C_FG, C_BG);
 }
 
+void ui_apo_warn_screen(uint32_t seconds_left){
+    char buf[24];
+    lcd_fill(C_BG);
+    lcd_fill_rect(0, 0, LCD_W, 16, C_RED);
+    lcd_text(4, 4, "APO", LCD_WHITE, C_RED);
+    /* "Power Off!" es el mensaje del firmware original V1.16. */
+    ui_text_scaled(8, 48, "Power Off!", 2, C_RED, C_BG);
+    snprintf(buf, sizeof buf, "Apagado en %lu s", (unsigned long)seconds_left);
+    lcd_text(8, 104, buf, C_FG, C_BG);
+    lcd_text(8, 128, "Sin actividad: el radio", C_GRY, C_BG);
+    lcd_text(8, 144, "se apaga solo (APO).", C_GRY, C_BG);
+    lcd_text(4, 292, "Cualquier tecla cancela", C_FG, C_BG);
+}
+
 void ui_modem_screen(uint8_t proto){
     static const char *NAMES[] = {"OFF", "DMR", "NXDN", "P25"};
     lcd_fill(C_BG);

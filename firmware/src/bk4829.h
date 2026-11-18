@@ -14,6 +14,7 @@
  * viven en la flash externa del radio, no aqui.
  */
 void bk4829_init(void);
+void bk4829_standby(uint8_t chip); /* REG_30 = 0x0000, como en init */
 bool bk4829_read_id(uint8_t chip, uint16_t *id);
 bool bk4829_set_freq(uint8_t chip, uint32_t freq_hz);
 bool bk4829_set_tx_power(uint8_t chip, uint8_t level); /* 0=bajo 1=medio 2=alto */

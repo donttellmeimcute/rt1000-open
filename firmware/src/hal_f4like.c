@@ -91,4 +91,14 @@ int hal_adc_batt_mv(void){
 static volatile uint32_t tick_ms;
 uint32_t hal_millis(void){ return tick_ms; }
 void SysTick_Handler(void){ tick_ms++; }
+
+void hal_power_off(void){
+    /* Sin latch de energia confirmado no hay corte fisico:
+     * se duerme el MCU. El llamador (app.c) ya puso el BK4829
+     * en standby y apago el LCD antes de llegar aqui. Con las
+     * interrupciones apagadas el WFI no despierta por SysTick;
+     * solo un reset / ciclo de energia vuelve a arrancar. */
+    __asm__ volatile("cpsid i");
+    for(;;) __asm__ volatile("wfi");
+}
 #endif

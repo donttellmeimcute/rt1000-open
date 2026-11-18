@@ -71,4 +71,5 @@ void ui_aprs_screen(const char *callsign, uint8_t ssid, const char *path, const 
 void ui_editor_screen(const char *title, const char *buffer, int cursor);
 void ui_alarm_screen(const char *callsign);
 void ui_msg_screen(const char *line1, const char *line2);
+void ui_apo_warn_screen(uint32_t seconds_left); /* aviso APO: "Power Off!" + cuenta atras */
 void ui_modem_screen(uint8_t proto); /* 0=OFF, 1=DMR, 2=NXDN, 3=P25 */

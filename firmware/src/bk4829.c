@@ -73,6 +73,9 @@ void bk4829_init(void){
         bk_write(c, BK_REG_MODE, 0x0000); /* standby */
     }
 }
+void bk4829_standby(uint8_t chip){
+    bk_write(chip, BK_REG_MODE, 0x0000); /* standby */
+}
 bool bk4829_read_id(uint8_t chip, uint16_t *id){
     /* El BK4829 no tiene registro de ID dedicado; la presencia
      * se confirma leyendo REG_0C (RSSI) y REG_30: un chip

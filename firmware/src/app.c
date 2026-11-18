@@ -1,4 +1,5 @@
 #include "app.h"
+#include "apo.h"
 #include "hal.h"
 #include "clock.h"
 #include "display.h"
@@ -34,7 +35,7 @@
 
 typedef enum {
     ST_SPLASH, ST_MAIN, ST_MENU, ST_GPS, ST_CHAN, ST_INFO, ST_ENTRY,
-    ST_FM, ST_APRS, ST_EDIT, ST_ALARM, ST_MSG, ST_MODEM
+    ST_FM, ST_APRS, ST_EDIT, ST_ALARM, ST_MSG, ST_MODEM, ST_APO_WARN
 } app_state_t;
 
 /* Items del menu (orden fijo; el menu hace scroll de 10 filas). */
@@ -43,7 +44,7 @@ enum {
     M_CALLSIGN, M_DEVNAME, M_SCAN, M_NOAA, M_FM, M_APRS_SSID, M_APRS_PATH,
     M_APRS_DETAIL, M_DTMF, M_MDC, M_VOX, M_WIDTH, M_BURST, M_TONE_RX, M_TONE_TX,
     M_SHIFT, M_OFFSET, M_TALK, M_REVERSE, M_MONITOR, M_MODEM, M_GPSFMT, M_TNC, M_ZONE, M_TXPRIO, M_MULTISTBY,
-    M_ALARM, M_BACKUP, M_RESET, M_CHAN, M_INFO,
+    M_APO, M_ALARM, M_BACKUP, M_RESET, M_CHAN, M_INFO,
     M_COUNT
 };
 
@@ -62,6 +63,7 @@ static const char *OFFSET_NAMES[] = {"OFF", "600k", "1.6M", "5M"};
 static const char *GPS_FMT_NAMES[] = {"GRADO", "GRADO.MIN", "GRADO.MIN.SEG"};
 static const char *TXPRIO_NAMES[] = {"OFF", "A", "B"};
 static const char *MODEM_NAMES[] = {"OFF", "DMR", "NXDN", "P25"};
+static const char *APO_OPTS[] = {"OFF", "15min", "30min", "60min", "120min"};
 
 typedef struct {
     rt1000_vfo_t vfo_a, vfo_b;
@@ -102,6 +104,35 @@ static int menu_sel;
 static int chan_sel;
 static char entry_buf[16];
 static uint32_t last_rssi_ms, last_beacon_ms;
+/* APO: ultima actividad (tecla, senal RX o beacon) y estado del
+ * aviso previo. Al entrar al aviso se guarda el estado anterior
+ * para volver a el si una tecla lo cancela. */
+static uint32_t last_activity_ms;
+static uint32_t apo_warn_t0;
+static app_state_t apo_return_state = ST_MAIN;
+static bool persist_now(void); /* definida mas abajo; la usa power_off_now */
+
+static void apo_touch(uint32_t now){
+    last_activity_ms = now;
+    if(state == ST_APO_WARN) state = apo_return_state;
+}
+
+/* Secuencia de apagado APO. Guarda ajustes, muestra el mensaje
+ * del original ("Power Off!"), pone el BK4829 en standby y
+ * apaga el LCD; hal_power_off() duerme el MCU (no retorna en
+ * ARM). Si el HAL retornara, el loop final evita reanudar la app. */
+static void power_off_now(void){
+    ui_msg_screen("Power Off!", "APO: apagando radio");
+    hal_delay_ms(800);
+    persist_now();
+    ctx.scanning = false;
+    bk4829_tx_enable(0, false);
+    bk4829_standby(0);
+    bk4829_standby(1);
+    lcd_power_off();
+    hal_power_off();
+    for(;;) hal_delay_ms(1000);
+}
 
 static uint32_t active_freq(void){
     return ctx.active == 0 ? ctx.vfo_a.freq_hz : ctx.vfo_b.freq_hz;
@@ -193,6 +224,7 @@ static void aprs_beacon_maybe(uint32_t now_ms){
     uint32_t iv = APRS_SECS[ctx.aprs_idx] * 1000u;
     if(now_ms - last_beacon_ms < iv) return;
     last_beacon_ms = now_ms;
+    apo_touch(now_ms); /* transmitir es actividad: reinicia el APO */
     uint8_t frame[160];
     size_t n = aprs_build_frame(frame, sizeof frame);
     if(ctx.settings.tnc && n > 0){
@@ -301,6 +333,13 @@ static void draw_all(void){
     case ST_ALARM: ui_alarm_screen(ctx.settings.callsign); break;
     case ST_MSG: ui_msg_screen(ctx.msg_line1, ctx.msg_line2); break;
     case ST_MODEM: ui_modem_screen(ctx.settings.modem); break;
+    case ST_APO_WARN: {
+        /* Cuenta atras en vivo: 10 s desde apo_warn_t0. */
+        uint32_t el = hal_millis() - apo_warn_t0;
+        uint32_t left = el >= APO_WARN_MS ? 0 : (APO_WARN_MS - el + 999u) / 1000u;
+        ui_apo_warn_screen(left);
+        break;
+    }
     case ST_MENU: {
         static const char *labels[M_COUNT] = {
             "VFO activo", "Paso", "Potencia", "Modo", "Squelch",
@@ -312,6 +351,7 @@ static void draw_all(void){
             "Shift", "Offset", "Talkaround", "Reverse",
             "Monitor", "Modo Modem", "GPS formato", "TNC", "Zona",
             "Prioridad TX", "Multi standby",
+            "APO (auto off)",
             "Alarma", "Backup", "Reset", "Canales", "Info"};
         char v[M_COUNT][16];
         snprintf(v[M_VFO], 16, "%s", ctx.active == 0 ? "A" : "B");
@@ -364,6 +404,7 @@ static void draw_all(void){
         snprintf(v[M_ZONE], 16, "%s", ctx.settings.zone_names[ctx.zone]);
         snprintf(v[M_TXPRIO], 16, "%s", TXPRIO_NAMES[ctx.settings.tx_priority]);
         snprintf(v[M_MULTISTBY], 16, "%s", ctx.settings.multi_standby ? "ON" : "OFF");
+        snprintf(v[M_APO], 16, "%s", APO_OPTS[rt1000_apo_idx_sanitize(ctx.settings.apo_idx)]);
         snprintf(v[M_ALARM], 16, ">");
         snprintf(v[M_BACKUP], 16, ">");
         snprintf(v[M_RESET], 16, ">");
@@ -498,6 +539,13 @@ static void menu_change(int dir){
         ctx.settings.tx_priority = (uint8_t)((ctx.settings.tx_priority + dir + 3) % 3);
         break;
     case M_MULTISTBY: ctx.settings.multi_standby = !ctx.settings.multi_standby; break;
+    case M_APO: {
+        int a = (int)rt1000_apo_idx_sanitize(ctx.settings.apo_idx) + dir;
+        if(a < 0) a = APO_NOPTS - 1;
+        if(a >= APO_NOPTS) a = 0;
+        ctx.settings.apo_idx = (uint8_t)a;
+        break;
+    }
     default: break;
     }
 }
@@ -680,6 +728,12 @@ static void handle_key(int key){
             state = ST_MENU;
         }
         break;
+    case ST_APO_WARN:
+        /* Defensa: el loop ya llamo a apo_touch(), que restaura
+         * el estado anterior antes de procesar la tecla. Si se
+         * llega aqui, cancelar el aviso sin tragar la tecla. */
+        state = apo_return_state;
+        break;
     }
 }
 
@@ -691,6 +745,7 @@ int app_main(void){
     /* Ajustes persistentes: si no hay flash valida, defaults. */
     if(!persist_load(&ctx.settings, ctx.chans, ctx.chan_used, CHAN_SLOTS))
         settings_defaults(&ctx.settings);
+    ctx.settings.apo_idx = rt1000_apo_idx_sanitize(ctx.settings.apo_idx);
     ui_set_theme(ctx.settings.theme);
     bk4829_init();
     bk4829_set_freq(0, ctx.vfo_a.freq_hz);
@@ -708,6 +763,7 @@ int app_main(void){
     splash_t0 = hal_millis();
     last_rssi_ms = splash_t0;
     last_beacon_ms = splash_t0;
+    last_activity_ms = splash_t0; /* el APO cuenta desde el arranque */
     ctx.last_scan_ms = splash_t0;
     draw_all();
     for(;;){
@@ -722,6 +778,7 @@ int app_main(void){
         }
         int key = keypad_get_key();
         if(key != KEY_NONE){
+            apo_touch(now); /* cualquier tecla reinicia el APO */
             handle_key(key);
             draw_all();
         }
@@ -729,6 +786,13 @@ int app_main(void){
             last_rssi_ms = now;
             ctx.rssi_dbm = bk4829_rssi_dbm(0);
             ctx.batt_mv = hal_adc_batt_mv();
+            /* Senal recibida = actividad: reinicia el APO y, si
+             * estaba en aviso, lo cancela y vuelve a la pantalla. */
+            if(rt1000_apo_signal_active(ctx.rssi_dbm, ctx.sql)){
+                bool was_warn = (state == ST_APO_WARN);
+                apo_touch(now);
+                if(was_warn) draw_all();
+            }
             if(state == ST_MAIN || state == ST_INFO) draw_all();
         }
         if(ctx.scanning && state == ST_MAIN &&
@@ -745,6 +809,28 @@ int app_main(void){
             if(hal_uart_read_byte(&b) == 0) gps_feed_byte(b);
         }
         aprs_beacon_maybe(now);
+        /* APO: aviso 10 s antes del apagado, apagado al vencer.
+         * La alarma de emergencia inhibe el APO. */
+        if(!ctx.alarm && rt1000_apo_timeout_ms(ctx.settings.apo_idx) != 0){
+            if(state == ST_APO_WARN){
+                if(now - apo_warn_t0 >= APO_WARN_MS ||
+                   rt1000_apo_due(last_activity_ms, now, ctx.settings.apo_idx)){
+                    power_off_now();
+                } else {
+                    /* Refrescar la cuenta atras solo cuando cambia. */
+                    static uint32_t last_warn_secs = 99;
+                    uint32_t secs = (APO_WARN_MS - (now - apo_warn_t0) + 999u) / 1000u;
+                    if(secs != last_warn_secs){ last_warn_secs = secs; draw_all(); }
+                }
+            } else if(rt1000_apo_warn_due(last_activity_ms, now, ctx.settings.apo_idx)){
+                apo_return_state = state;
+                apo_warn_t0 = now;
+                state = ST_APO_WARN;
+                draw_all();
+            } else if(rt1000_apo_due(last_activity_ms, now, ctx.settings.apo_idx)){
+                power_off_now();
+            }
+        }
         hal_delay_ms(50);
     }
     return 0;

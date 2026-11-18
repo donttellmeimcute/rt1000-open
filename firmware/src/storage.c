@@ -1,4 +1,5 @@
 #include "storage.h"
+#include "apo.h"
 #include "hal.h"
 #include <string.h>
 uint32_t bcd_pack_10hz(uint32_t hz){
@@ -113,6 +114,7 @@ void settings_defaults(rt1000_settings_t *s){
     s->gps_fmt = 0; s->tx_priority = 0; s->multi_standby = 0;
     s->tnc = 0; s->vox = 0; s->wide = 0; s->tone_burst = 0;
     s->shift_dir = 0; s->offset_hz = 600000; s->talkaround = 0; s->monitor = 0;
+    s->apo_idx = 0; /* APO OFF por defecto: no apagarse solo al estrenar */
     s->scan_interval_ms = 300; s->fm_freq_khz = 87900;
     memcpy(s->zone_names[0], "ZONA 1", 6);
     memcpy(s->zone_names[1], "ZONA 2", 6);
@@ -156,6 +158,10 @@ bool persist_load(rt1000_settings_t *s, rt1000_chan_t *chans, bool *used, int co
     rt1000_settings_t tmp;
     memcpy(&tmp, sector, sizeof tmp);
     if(tmp.magic != SETTINGS_MAGIC || tmp.version != 1) return false;
+    /* Flash de una version anterior al APO (o byte corrupto que
+     * paso el checksum): el campo nuevo puede venir en 0xFF.
+     * Sanear antes de usarlo; el resto del struct no cambia. */
+    tmp.apo_idx = rt1000_apo_idx_sanitize(tmp.apo_idx);
     *s = tmp;
     uint16_t mask = (uint16_t)(sector[768] | (sector[769] << 8));
     for(int i = 0; i < count; i++){

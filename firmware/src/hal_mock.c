@@ -66,4 +66,7 @@ int hal_flash_write(uint32_t addr, const uint8_t *buf, size_t len){
 void hal_delay_ms(uint32_t ms){ (void)ms; }
 static uint32_t t; uint32_t hal_millis(void){ return ++t; }
 int hal_adc_batt_mv(void){ return 0; } /* sin ADC en host */
+static bool power_off_flag;
+void hal_power_off(void){ power_off_flag = true; }
+bool hal_power_off_called(void){ return power_off_flag; }
 #endif

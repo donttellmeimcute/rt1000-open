@@ -48,3 +48,15 @@ uint32_t hal_millis(void);
  * divisor de bateria NO esta confirmado). En host devuelve 0
  * (sin bateria); en ARM devuelve 0 hasta confirmar el canal. */
 int hal_adc_batt_mv(void);
+
+/* Apagado (APO). En ARM NO retorna: duerme el MCU con WFI e
+ * interrupciones apagadas; solo un reset / ciclo de energia
+ * lo despierta. El pin de latch de energia del 1000Pro NO
+ * esta confirmado en V1.16, asi que esto es apagado por
+ * sueno (BK en standby + LCD apagado, ver app.c), no un
+ * corte fisico de alimentacion. En host solo marca el flag
+ * hal_power_off_called() para que los tests lo observen. */
+void hal_power_off(void);
+#ifdef RT1000_HOST_TEST
+bool hal_power_off_called(void);
+#endif

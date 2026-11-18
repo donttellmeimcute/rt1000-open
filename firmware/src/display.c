@@ -43,6 +43,11 @@ void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1){
     lcd_write_cmd(0x2B); lcd_write_data(y0>>8); lcd_write_data(y0); lcd_write_data(y1>>8); lcd_write_data(y1);
     lcd_write_cmd(0x2C);
 }
+void lcd_power_off(void){
+    lcd_write_cmd(0x28); /* DISPOFF */
+    lcd_write_cmd(0x10); /* SLPIN */
+    gpio_clr(GPIOC,6); gpio_clr(GPIOB,3); /* backlight off */
+}
 void lcd_fill(uint16_t color){
     lcd_set_window(0,0,LCD_W-1,LCD_H-1);
     for(uint32_t i=0;i<(uint32_t)LCD_W*LCD_H;i++){ lcd_write_data(color>>8); lcd_write_data(color&0xFF); }
@@ -66,6 +71,7 @@ void lcd_color_bars(void){
 /* Host: framebuffer en RAM para pruebas. */
 static uint16_t fb[LCD_W*LCD_H];
 void lcd_init(void){ for(size_t i=0;i<sizeof fb/sizeof fb[0];i++) fb[i]=LCD_BLACK; }
+void lcd_power_off(void){ lcd_fill(LCD_BLACK); }
 void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1){ (void)x0;(void)y0;(void)x1;(void)y1; }
 void lcd_fill(uint16_t c){ for(size_t i=0;i<sizeof fb/sizeof fb[0];i++) fb[i]=c; }
 void lcd_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t c){

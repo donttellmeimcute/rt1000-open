@@ -11,6 +11,7 @@
 #define LCD_W 240
 #define LCD_H 320
 void lcd_init(void);
+void lcd_power_off(void); /* SLPIN + DISPOFF + backlight off (ARM); negro en host */
 void lcd_fill(uint16_t color);
 void lcd_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
 void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);

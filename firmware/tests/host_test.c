@@ -13,6 +13,7 @@
 #include "vfo.h"
 #include "storage.h"
 #include "tones.h"
+#include "apo.h"
 #include "bk4829.h"
 #include "ui.h"
 #include "display.h"
@@ -20,6 +21,7 @@
 extern uint8_t mock_flash[];
 extern void mock_uart_feed(const uint8_t*, size_t);
 extern size_t mock_uart_tx_len(void);
+extern const uint16_t *lcd_fb(void);
 static int fails=0;
 #define CHECK(c,msg) do{ if(c){ printf("PASS %s\n",msg); } else { printf("FAIL %s\n",msg); fails++; } }while(0)
 int main(void){
@@ -109,6 +111,30 @@ int main(void){
     CHECK(!bk4829_set_vox(0, 10), "BK4829 VOX >9 rechazado");
     CHECK(bk4829_set_tone_burst(0, true), "BK4829 tone burst 1750 guardado");
     CHECK(bk4829_set_tones(0, 885, 885, 23, 23), "BK4829 tonos CTCSS/DCS guardados");
+    /* APO: minutos, vencimiento y aviso (logica pura, apo.c) */
+    CHECK(rt1000_apo_minutes(0) == 0 && rt1000_apo_minutes(1) == 15 && rt1000_apo_minutes(2) == 30 && rt1000_apo_minutes(3) == 60 && rt1000_apo_minutes(4) == 120, "APO minutos OFF/15/30/60/120");
+    CHECK(rt1000_apo_minutes(5) == 0 && rt1000_apo_minutes(255) == 0, "APO indice invalido -> OFF");
+    CHECK(rt1000_apo_timeout_ms(2) == 1800000u, "APO 30 min = 1800000 ms");
+    CHECK(!rt1000_apo_due(1000, 1000 + 1800000u - 1, 2), "APO 30min: 1 ms antes no vence");
+    CHECK(rt1000_apo_due(1000, 1000 + 1800000u, 2), "APO 30min: al vencer dispara");
+    CHECK(!rt1000_apo_due(1000, 1000 + 1800000u, 0), "APO OFF nunca dispara");
+    CHECK(rt1000_apo_remaining_ms(1000, 1000 + 1790000u, 2) == 10000u, "APO quedan 10 s a falta de 10 s");
+    CHECK(rt1000_apo_warn_due(1000, 1000 + 1790000u, 2), "APO aviso a 10 s del apagado");
+    CHECK(!rt1000_apo_warn_due(1000, 1000 + 1789999u, 2), "APO sin aviso a 10.001 s");
+    CHECK(!rt1000_apo_warn_due(1000, 1000 + 1800000u, 2), "APO vencido ya no avisa, apaga");
+    CHECK(rt1000_apo_remaining_ms(0xFFFFFF00u, 0x00000E10u, 1) == 900000u - 3856u, "APO wrap de hal_millis: resto correcto");
+    CHECK(rt1000_apo_signal_active(-100, 2) && !rt1000_apo_signal_active(-112, 2) && !rt1000_apo_signal_active(-120, 2), "APO senal: -100 si, -112/-120 no (sql 2)");
+    CHECK(rt1000_apo_signal_active(-119, 0) && !rt1000_apo_signal_active(-120, 0), "APO senal: umbral sql 0 = -120 dBm");
+    CHECK(rt1000_apo_idx_sanitize(4) == 4 && rt1000_apo_idx_sanitize(5) == 0 && rt1000_apo_idx_sanitize(255) == 0, "APO sanitize: 4 ok, 5/255 -> OFF");
+    CHECK(!hal_power_off_called(), "APO hal_power_off: flag en 0 antes");
+    hal_power_off();
+    CHECK(hal_power_off_called(), "APO hal_power_off: flag en 1 despues");
+    bk4829_standby(0); bk4829_standby(1);
+    CHECK(1, "BK4829 standby ambos chips (sin crash)");
+    lcd_fill(LCD_WHITE);
+    CHECK(lcd_fb()[0] == LCD_WHITE, "LCD fill blanco previo al power off");
+    lcd_power_off();
+    CHECK(lcd_fb()[0] == LCD_BLACK, "LCD power off: framebuffer en negro");
     /* Flash 25Q + persistencia de ajustes y canales */
     hal_spi_init();
     uint32_t fsz = 0;
@@ -121,11 +147,19 @@ int main(void){
     snprintf(pch[2].name, sizeof pch[2].name, "CH-003"); pused[2] = true;
     memcpy(st.callsign, "XE1ARS", 6);
     memcpy(st.device_name, "RT-1000Pro", 10);
+    st.apo_idx = 2; /* APO 30 min: debe sobrevivir a save/load */
     CHECK(persist_save(&st, pch, pused, 16), "Persist: guardado en flash");
     rt1000_settings_t st2; rt1000_chan_t pch2[16]; bool pused2[16];
     memset(&st2, 0, sizeof st2); memset(pch2, 0, sizeof pch2); memset(pused2, 0, sizeof pused2);
     CHECK(persist_load(&st2, pch2, pused2, 16), "Persist: cargado con magic/checksum OK");
     CHECK(memcmp(st2.callsign, "XE1ARS", 6) == 0 && st2.fm_freq_khz == 87900, "Persist: callsign y FM conservados");
+    CHECK(st2.apo_idx == 2, "Persist: APO 30min roundtrip");
+    /* APO invalido guardado (flash vieja / byte 0xFF): load lo sanea a OFF */
+    st.apo_idx = 9;
+    CHECK(persist_save(&st, pch, pused, 16), "Persist APO invalido: guardado");
+    rt1000_settings_t st_apo; rt1000_chan_t pch_apo[16]; bool pused_apo[16];
+    CHECK(persist_load(&st_apo, pch_apo, pused_apo, 16), "Persist APO invalido: load OK");
+    CHECK(st_apo.apo_idx == 0, "Persist APO invalido: saneado a OFF");
     CHECK(pused2[2] && pch2[2].rx_hz == 146520000u && strcmp(pch2[2].name, "CH-003") == 0, "Persist: canal 3 roundtrip");
     CHECK(!pused2[0] && !pused2[1], "Persist: canales no usados en 0");
     /* Corrupcion: un byte cambiado invalida el checksum */
@@ -136,15 +170,15 @@ int main(void){
         rt1000_settings_t st3; rt1000_chan_t pch3[16]; bool pused3[16];
         CHECK(!persist_load(&st3, pch3, pused3, 16), "Persist: checksum invalido se rechaza");
     }
-    /* UI: menu con scroll no crashea con 39 items; ciclo modem OFF/DMR/NXDN/P25 */
+    /* UI: menu con scroll no crashea con 40 items; ciclo modem OFF/DMR/NXDN/P25 */
     {
-        const char *labels[39]; const char *values[39];
-        static char lab[39][8];
-        for(int i = 0; i < 39; i++){ snprintf(lab[i], 8, "Item%d", i); labels[i] = lab[i]; values[i] = "X"; }
+        const char *labels[40]; const char *values[40];
+        static char lab[40][8];
+        for(int i = 0; i < 40; i++){ snprintf(lab[i], 8, "Item%d", i); labels[i] = lab[i]; values[i] = "X"; }
         lcd_init();
-        ui_menu(labels, values, 39, 38);
-        ui_menu(labels, values, 39, 0);
-        CHECK(1, "UI menu scroll 39 items (sin crash)");
+        ui_menu(labels, values, 40, 39);
+        ui_menu(labels, values, 40, 0);
+        CHECK(1, "UI menu scroll 40 items (sin crash)");
         const char *modem_names[] = {"OFF", "DMR", "NXDN", "P25"};
         CHECK(strcmp(modem_names[(0 + 1) % 4], "DMR") == 0, "Modem OFF->DMR");
         CHECK(strcmp(modem_names[(3 + 1) % 4], "OFF") == 0, "Modem P25->OFF");
@@ -187,7 +221,6 @@ int main(void){
     CHECK(ch2.rx_hz==146520000u && ch2.tx_hz==146520000u && ch2.flags==0x01,"Canal 32B roundtrip");
     /* Display: framebuffer host, barras de color */
     lcd_init(); lcd_color_bars();
-    extern const uint16_t *lcd_fb(void);
     CHECK(lcd_fb()[0]==LCD_RED && lcd_fb()[35]==LCD_GREEN && lcd_fb()[65]==LCD_BLUE,"LCD barras en framebuffer");
     lcd_fill(LCD_BLUE); CHECK(lcd_fb()[100]==LCD_BLUE,"LCD fill");
     printf(fails?"RESULTADO: %d FALLOS\n":"RESULTADO: TODO OK\n",fails);

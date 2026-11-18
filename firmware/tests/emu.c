@@ -104,6 +104,7 @@ int main(void){
             "Shift", "Offset", "Talkaround", "Reverse",
             "Monitor", "Modo Modem", "GPS formato", "TNC", "Zona",
             "Prioridad TX", "Multi standby",
+            "APO (auto off)",
             "Alarma", "Backup", "Reset", "Canales", "Info"};
         static const char *values[] = {
             "A", "12.5k", "ALTA", "FM", "2",
@@ -115,8 +116,9 @@ int main(void){
             "0", "600k", "OFF", "OFF",
             "OFF", "OFF", "GRADO", "OFF", "ZONA 1",
             "OFF", "OFF",
+            "30min",
             ">", ">", ">", ">", ">"};
-        ui_menu(labels, values, 39, 8);
+        ui_menu(labels, values, 40, 8);
         dump_ppm("emu-out/05-menu.ppm");
     }
 
@@ -182,6 +184,7 @@ int main(void){
             "Shift", "Offset", "Talkaround", "Reverse",
             "Monitor", "Modo Modem", "GPS formato", "TNC", "Zona",
             "Prioridad TX", "Multi standby",
+            "APO (auto off)",
             "Alarma", "Backup", "Reset", "Canales", "Info"};
         static const char *values[] = {
             "A", "12.5k", "ALTA", "FM", "2",
@@ -193,14 +196,19 @@ int main(void){
             "0", "600k", "OFF", "OFF",
             "OFF", "OFF", "GRADO", "OFF", "ZONA 1",
             "OFF", "OFF",
+            "30min",
             ">", ">", ">", ">", ">"};
-        ui_menu(labels, values, 39, 30);
+        ui_menu(labels, values, 40, 30);
         dump_ppm("emu-out/15-menu-scroll.ppm");
     }
 
     /* 16: pantalla Modo Modem (DMR). */
     ui_modem_screen(1);
     dump_ppm("emu-out/16-modem.ppm");
+
+    /* 17: aviso APO (Power Off! en 7 s). */
+    ui_apo_warn_screen(7);
+    dump_ppm("emu-out/17-apo.ppm");
 
     return 0;
 }
