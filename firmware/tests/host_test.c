@@ -136,15 +136,19 @@ int main(void){
         rt1000_settings_t st3; rt1000_chan_t pch3[16]; bool pused3[16];
         CHECK(!persist_load(&st3, pch3, pused3, 16), "Persist: checksum invalido se rechaza");
     }
-    /* UI: menu con scroll no crashea con 38 items */
+    /* UI: menu con scroll no crashea con 39 items; ciclo modem OFF/DMR/NXDN/P25 */
     {
-        const char *labels[38]; const char *values[38];
-        static char lab[38][8];
-        for(int i = 0; i < 38; i++){ snprintf(lab[i], 8, "Item%d", i); labels[i] = lab[i]; values[i] = "X"; }
+        const char *labels[39]; const char *values[39];
+        static char lab[39][8];
+        for(int i = 0; i < 39; i++){ snprintf(lab[i], 8, "Item%d", i); labels[i] = lab[i]; values[i] = "X"; }
         lcd_init();
-        ui_menu(labels, values, 38, 37);
-        ui_menu(labels, values, 38, 0);
-        CHECK(1, "UI menu scroll 38 items (sin crash)");
+        ui_menu(labels, values, 39, 38);
+        ui_menu(labels, values, 39, 0);
+        CHECK(1, "UI menu scroll 39 items (sin crash)");
+        const char *modem_names[] = {"OFF", "DMR", "NXDN", "P25"};
+        CHECK(strcmp(modem_names[(0 + 1) % 4], "DMR") == 0, "Modem OFF->DMR");
+        CHECK(strcmp(modem_names[(3 + 1) % 4], "OFF") == 0, "Modem P25->OFF");
+        CHECK(strcmp(modem_names[(0 - 1 + 4) % 4], "P25") == 0, "Modem OFF<-P25");
     }
     /* Bootloader RX end-to-end con el updater Python (mock):
      * 4x CONNECT, 1x UPDATE, 2 paquetes de datos, verificar flash+ACKs */

@@ -45,6 +45,7 @@ typedef struct {
     const char *aprs_state; /* "OFF", "30s", "60s", "5min" */
     bool monitor;        /* Monitor Mode: squelch abierto */
     bool scan;           /* Scanning activo */
+    bool modem;          /* Modo Módem MMDVM activo */
     int batt_mv;         /* bateria en mV, 0 si sin ADC */
     uint8_t gps_fmt;     /* 0 grado, 1 grado.min, 2 grado.min.seg */
 } ui_state_t;
@@ -70,3 +71,4 @@ void ui_aprs_screen(const char *callsign, uint8_t ssid, const char *path, const 
 void ui_editor_screen(const char *title, const char *buffer, int cursor);
 void ui_alarm_screen(const char *callsign);
 void ui_msg_screen(const char *line1, const char *line2);
+void ui_modem_screen(uint8_t proto); /* 0=OFF, 1=DMR, 2=NXDN, 3=P25 */

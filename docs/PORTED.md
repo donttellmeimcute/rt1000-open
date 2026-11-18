@@ -34,6 +34,7 @@ del pin en el radio real antes de darse por válido.
 | Ancho de banda Wide/Narrow | Menú + selección guardada; registro BK4829 sin confirmar |
 | Tone Burst 1750 Hz | Menú + selección guardada; registro BK4829 sin confirmar |
 | Monitor Mode | Portado (squelch abierto, indicador MON) |
+| Modo Módem (DMR/NXDN/P25) | Portado: menú OFF/DMR/NXDN/P25 + pantalla; WIDE, CTCSS/DCS off, squelch abierto, indicador MDM. Es el lado firmware de la conversión a nodo MMDVM — ver `docs/DMR-CONVERSION.md`. El módem y los puntos de audio plano son hardware, no firmware. |
 | Multi Standby | Menú (config, doble VFO ya visible) |
 | TX Priority (A/B/OFF) | Menú (config) |
 | Zonas (Zone Set) | Portado (4 zonas x 4 canales, nombres editables en flash) |
@@ -64,6 +65,8 @@ del pin en el radio real antes de darse por válido.
 | Función | Razón |
 |---|---|
 | DMR | El hardware es analógico; "DMR" aparece una sola vez en V1.16 sin TDMA/modem. El camino DMR sigue siendo el Baofeng DM32. |
+| NXDN / P25 | No aparecen ni una vez en V1.16 (0 ocurrencias); tampoco TDMA, AMBE, vocoder, Color Code, Talkgroup ni 4FSK. Sin código de voz digital. |
+| Trasplante del codec del DM32 | No hay chip que sacar: en el DM32 el codec AMBE es un blob de software que se copia a RAM al arrancar, y el módem DMR es hardware dentro del SoC HR_C7000 (C-SKY, no ARM). Sacarlo mataría el DM32 y no serviría en el 1000Pro. La vía real para modos digitales en este radio sigue siendo un módem MMDVM externo. |
 | Airband TX | Prohibido por fábrica ("Aviation transmission prohibited! License required!"); solo con licencia de aviación + Radtel. Airband queda RX. |
 | All Band Test Mode | Modo de fábrica, no es función de usuario. |
 | DTMF Remote Kill / Remote CTC-DCS | Requieren decodificación DTMF por DSP en recepción, no implementada. |
@@ -72,6 +75,6 @@ del pin en el radio real antes de darse por válido.
 ## Cómo se verifica
 
 - `make test` — lógica en host (NMEA, APRS+FCS, TX freq, NOAA, scan, tonos, persistencia con flash mock, menú con scroll).
-- `make emu` — 16 pantallas renderizadas con el driver LCD real en `firmware/emu-out/`.
+- `make emu` — 17 pantallas renderizadas con el driver LCD real en `firmware/emu-out/`.
 - `make arm` + `updater --verify-only` + `--dry-run` — .hex válido (246 paquetes).
 - Antes de flashear la app: `make test-hw TEST=3` (LCD) y `TEST=4` (BK4829). Ver `docs/FLASHING.md`.

@@ -34,7 +34,7 @@
 
 typedef enum {
     ST_SPLASH, ST_MAIN, ST_MENU, ST_GPS, ST_CHAN, ST_INFO, ST_ENTRY,
-    ST_FM, ST_APRS, ST_EDIT, ST_ALARM, ST_MSG
+    ST_FM, ST_APRS, ST_EDIT, ST_ALARM, ST_MSG, ST_MODEM
 } app_state_t;
 
 /* Items del menu (orden fijo; el menu hace scroll de 10 filas). */
@@ -42,7 +42,7 @@ enum {
     M_VFO, M_STEP, M_POWER, M_MODE, M_SQL, M_GPS, M_APRS, M_BACKLIGHT, M_THEME,
     M_CALLSIGN, M_DEVNAME, M_SCAN, M_NOAA, M_FM, M_APRS_SSID, M_APRS_PATH,
     M_APRS_DETAIL, M_DTMF, M_MDC, M_VOX, M_WIDTH, M_BURST, M_TONE_RX, M_TONE_TX,
-    M_SHIFT, M_OFFSET, M_TALK, M_REVERSE, M_MONITOR, M_GPSFMT, M_TNC, M_ZONE, M_TXPRIO, M_MULTISTBY,
+    M_SHIFT, M_OFFSET, M_TALK, M_REVERSE, M_MONITOR, M_MODEM, M_GPSFMT, M_TNC, M_ZONE, M_TXPRIO, M_MULTISTBY,
     M_ALARM, M_BACKUP, M_RESET, M_CHAN, M_INFO,
     M_COUNT
 };
@@ -61,6 +61,7 @@ static const char *OFFSET_NAMES[] = {"OFF", "600k", "1.6M", "5M"};
 #define NOFFSETS 4
 static const char *GPS_FMT_NAMES[] = {"GRADO", "GRADO.MIN", "GRADO.MIN.SEG"};
 static const char *TXPRIO_NAMES[] = {"OFF", "A", "B"};
+static const char *MODEM_NAMES[] = {"OFF", "DMR", "NXDN", "P25"};
 
 typedef struct {
     rt1000_vfo_t vfo_a, vfo_b;
@@ -146,6 +147,7 @@ static void ui_state_fill(ui_state_t *s){
     s->aprs_state = APRS_OPTS[ctx.aprs_idx];
     s->monitor = ctx.settings.monitor;
     s->scan = ctx.scanning;
+    s->modem = ctx.settings.modem != 0;
     s->batt_mv = ctx.batt_mv;
 }
 
@@ -298,6 +300,7 @@ static void draw_all(void){
     case ST_EDIT: ui_editor_screen(edit_title(ctx.edit_target), ctx.edit_buf, ctx.edit_cur); break;
     case ST_ALARM: ui_alarm_screen(ctx.settings.callsign); break;
     case ST_MSG: ui_msg_screen(ctx.msg_line1, ctx.msg_line2); break;
+    case ST_MODEM: ui_modem_screen(ctx.settings.modem); break;
     case ST_MENU: {
         static const char *labels[M_COUNT] = {
             "VFO activo", "Paso", "Potencia", "Modo", "Squelch",
@@ -307,7 +310,7 @@ static void draw_all(void){
             "DTMF", "MDC ID", "VOX", "Ancho banda", "Tone Burst",
             "CTCSS RX", "CTCSS TX",
             "Shift", "Offset", "Talkaround", "Reverse",
-            "Monitor", "GPS formato", "TNC", "Zona",
+            "Monitor", "Modo Modem", "GPS formato", "TNC", "Zona",
             "Prioridad TX", "Multi standby",
             "Alarma", "Backup", "Reset", "Canales", "Info"};
         char v[M_COUNT][16];
@@ -355,6 +358,7 @@ static void draw_all(void){
         snprintf(v[M_TALK], 16, "%s", ctx.settings.talkaround ? "ON" : "OFF");
         snprintf(v[M_REVERSE], 16, "%s", ctx.reverse ? "ON" : "OFF");
         snprintf(v[M_MONITOR], 16, "%s", ctx.settings.monitor ? "ON" : "OFF");
+        snprintf(v[M_MODEM], 16, "%s", MODEM_NAMES[ctx.settings.modem]);
         snprintf(v[M_GPSFMT], 16, "%s", GPS_FMT_NAMES[ctx.settings.gps_fmt]);
         snprintf(v[M_TNC], 16, "%s", ctx.settings.tnc ? "ON" : "OFF");
         snprintf(v[M_ZONE], 16, "%s", ctx.settings.zone_names[ctx.zone]);
@@ -382,6 +386,21 @@ static void tones_apply(void){
         rt1000_tone_is_dcs(ctx.settings.tone_tx) ? 0 : rt1000_tone_value(ctx.settings.tone_tx),
         rt1000_tone_is_dcs(ctx.settings.tone_rx) ? rt1000_tone_value(ctx.settings.tone_rx) : 0,
         rt1000_tone_is_dcs(ctx.settings.tone_tx) ? rt1000_tone_value(ctx.settings.tone_tx) : 0);
+}
+
+/* Modo Módem (nodo MMDVM): audio plano para el módem externo.
+ * ON: ancho WIDE, CTCSS/DCS a cero, squelch abierto (el módem
+ * decide por nivel). Los ajustes guardados NO se pierden: al
+ * apagar el modo se reaplican. Ver docs/DMR-CONVERSION.md. */
+static void modem_set(uint8_t proto){
+    ctx.settings.modem = proto;
+    if(proto != 0){
+        bk4829_set_bandwidth(0, true);
+        bk4829_set_tones(0, 0, 0, 0, 0);
+    } else {
+        bk4829_set_bandwidth(0, ctx.settings.wide);
+        tones_apply();
+    }
 }
 
 /* Cambia el valor del item de menu seleccionado con Left/Right. */
@@ -460,6 +479,13 @@ static void menu_change(int dir){
     case M_TALK: ctx.settings.talkaround = !ctx.settings.talkaround; break;
     case M_REVERSE: ctx.reverse = !ctx.reverse; break;
     case M_MONITOR: ctx.settings.monitor = !ctx.settings.monitor; break;
+    case M_MODEM: {
+        int p = (int)ctx.settings.modem + dir;
+        if(p < 0) p = 3;
+        if(p > 3) p = 0;
+        modem_set((uint8_t)p);
+        break;
+    }
     case M_GPSFMT:
         ctx.settings.gps_fmt = (uint8_t)((ctx.settings.gps_fmt + dir + 3) % 3);
         break;
@@ -481,9 +507,11 @@ static void menu_ok(void){
     case M_CALLSIGN: edit_start(0); break;
     case M_DEVNAME: edit_start(1); break;
     case M_SCAN:
-        ctx.scanning = true;
-        ctx.last_scan_ms = hal_millis();
-        state = ST_MAIN;
+        if(ctx.settings.modem == 0){
+            ctx.scanning = true;
+            ctx.last_scan_ms = hal_millis();
+            state = ST_MAIN;
+        }
         break;
     case M_FM: state = ST_FM; break;
     case M_APRS_DETAIL: state = ST_APRS; break;
@@ -508,6 +536,7 @@ static void menu_ok(void){
         break;
     case M_CHAN: chan_sel = 0; state = ST_CHAN; break;
     case M_INFO: state = ST_INFO; break;
+    case M_MODEM: state = ST_MODEM; break;
     default: break;
     }
 }
@@ -640,6 +669,17 @@ static void handle_key(int key){
             state = ST_MENU;
         }
         break;
+    case ST_MODEM:
+        if(key == K_LEFT || key == K_RIGHT){
+            int p = (int)ctx.settings.modem + (key == K_RIGHT ? 1 : -1);
+            if(p < 0) p = 3;
+            if(p > 3) p = 0;
+            modem_set((uint8_t)p);
+        } else if(key == K_BACK){
+            persist_now();
+            state = ST_MENU;
+        }
+        break;
     }
 }
 
@@ -659,6 +699,7 @@ int app_main(void){
     bk4829_set_bandwidth(0, ctx.settings.wide);
     bk4829_set_tone_burst(0, ctx.settings.tone_burst);
     tones_apply();
+    modem_set(ctx.settings.modem); /* reaplica modo modem guardado */
     if(si4732_power_up()){
         uint8_t rev[9];
         ctx.si4732_ok = si4732_get_rev(rev);

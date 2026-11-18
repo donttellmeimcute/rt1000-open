@@ -52,7 +52,7 @@ static void demo_state(ui_state_t *s, int gps_fix, int16_t rssi){
     s->callsign = "XE1ARS";
     s->device_name = "RT-1000Pro";
     s->aprs_state = "60s";
-    s->monitor = false; s->scan = false;
+    s->monitor = false; s->scan = false; s->modem = false;
     s->batt_mv = 0; /* sin ADC en host */
 }
 
@@ -102,7 +102,7 @@ int main(void){
             "DTMF", "MDC ID", "VOX", "Ancho banda", "Tone Burst",
             "CTCSS RX", "CTCSS TX",
             "Shift", "Offset", "Talkaround", "Reverse",
-            "Monitor", "GPS formato", "TNC", "Zona",
+            "Monitor", "Modo Modem", "GPS formato", "TNC", "Zona",
             "Prioridad TX", "Multi standby",
             "Alarma", "Backup", "Reset", "Canales", "Info"};
         static const char *values[] = {
@@ -113,10 +113,10 @@ int main(void){
             "1234", "0001", "OFF", "NARROW", "OFF",
             "OFF", "OFF",
             "0", "600k", "OFF", "OFF",
-            "OFF", "GRADO", "OFF", "ZONA 1",
+            "OFF", "OFF", "GRADO", "OFF", "ZONA 1",
             "OFF", "OFF",
             ">", ">", ">", ">", ">"};
-        ui_menu(labels, values, 38, 8);
+        ui_menu(labels, values, 39, 8);
         dump_ppm("emu-out/05-menu.ppm");
     }
 
@@ -180,7 +180,7 @@ int main(void){
             "DTMF", "MDC ID", "VOX", "Ancho banda", "Tone Burst",
             "CTCSS RX", "CTCSS TX",
             "Shift", "Offset", "Talkaround", "Reverse",
-            "Monitor", "GPS formato", "TNC", "Zona",
+            "Monitor", "Modo Modem", "GPS formato", "TNC", "Zona",
             "Prioridad TX", "Multi standby",
             "Alarma", "Backup", "Reset", "Canales", "Info"};
         static const char *values[] = {
@@ -191,12 +191,16 @@ int main(void){
             "1234", "0001", "OFF", "NARROW", "OFF",
             "OFF", "OFF",
             "0", "600k", "OFF", "OFF",
-            "OFF", "GRADO", "OFF", "ZONA 1",
+            "OFF", "OFF", "GRADO", "OFF", "ZONA 1",
             "OFF", "OFF",
             ">", ">", ">", ">", ">"};
-        ui_menu(labels, values, 38, 30);
+        ui_menu(labels, values, 39, 30);
         dump_ppm("emu-out/15-menu-scroll.ppm");
     }
+
+    /* 16: pantalla Modo Modem (DMR). */
+    ui_modem_screen(1);
+    dump_ppm("emu-out/16-modem.ppm");
 
     return 0;
 }

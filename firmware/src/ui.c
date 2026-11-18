@@ -94,8 +94,10 @@ static void status_bar(const ui_state_t *st){
     }
     if(st->tx) lcd_text(100, 4, "TX", C_RED, C_FG);
     else lcd_text(100, 4, "RX", C_BG, C_FG);
-    if(st->monitor) lcd_text(120, 4, "MON", C_YLW, C_FG);
-    if(st->scan) lcd_text(120, 4, "SCN", C_YLW, C_FG);
+    /* Un solo indicador en x=120: MDM > SCN > MON. */
+    if(st->modem) lcd_text(120, 4, "MDM", C_CYN, C_FG);
+    else if(st->scan) lcd_text(120, 4, "SCN", C_YLW, C_FG);
+    else if(st->monitor) lcd_text(120, 4, "MON", C_YLW, C_FG);
 }
 
 void ui_splash(const char *callsign, const char *version){
@@ -342,4 +344,19 @@ void ui_msg_screen(const char *line1, const char *line2){
     if(line1) ui_text_scaled(8, 80, line1, 2, C_FG, C_BG);
     if(line2) lcd_text(8, 128, line2, C_GRY, C_BG);
     lcd_text(4, 292, "OK confirma  BACK cancela", C_FG, C_BG);
+}
+
+void ui_modem_screen(uint8_t proto){
+    static const char *NAMES[] = {"OFF", "DMR", "NXDN", "P25"};
+    lcd_fill(C_BG);
+    lcd_fill_rect(0, 0, LCD_W, 16, C_FG);
+    lcd_text(4, 4, "MODO MODEM", C_BG, C_FG);
+    ui_text_scaled(8, 32, (char *)NAMES[proto > 3 ? 0 : proto], 3, C_ACC, C_BG);
+    lcd_text(8, 88, "Nodo MMDVM (no terminal)", C_FG, C_BG);
+    lcd_text(8, 112, "Squelch abierto", C_FG, C_BG);
+    lcd_text(8, 128, "CTCSS/DCS off  WIDE", C_FG, C_BG);
+    lcd_text(8, 152, "Audio plano: DISC / MOD", C_FG, C_BG);
+    lcd_text(8, 176, "PTT + COS al modem", C_GRY, C_BG);
+    lcd_text(8, 200, "Ver docs/DMR-CONVERSION.md", C_GRY, C_BG);
+    lcd_text(4, 292, "L/R protocolo  BACK sale", C_FG, C_BG);
 }

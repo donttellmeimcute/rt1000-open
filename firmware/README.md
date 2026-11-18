@@ -50,11 +50,11 @@ display y el transceptor en el radio real.
   - `ui.c` / `app.c` — UI completa (ST7789V 240x320): splash con
     callsign, pantalla principal con VFO A grande (3x) + VFO B,
     S-meter del BK4829, barra de estado (callsign, RX/TX, GPS,
-    MON, SCN), menu real de 38 items con scroll (VFO, paso,
+    MON, SCN, MDM), menu real de 39 items con scroll (VFO, paso,
     potencia, modo, squelch, GPS, APRS, luz, tema, callsign,
     nombre, scan, NOAA, radio FM, APRS SSID/path/detalle, DTMF,
     MDC ID, VOX, ancho de banda, tone burst, CTCSS RX/TX, shift,
-    offset, talkaround, reverse, monitor, formato GPS, TNC, zona,
+    offset, talkaround, reverse, monitor, modo modem, formato GPS, TNC, zona,
     prioridad TX, multi standby, alarma, backup, reset, canales,
     info), pantalla GPS (sats, velocidad, rumbo, 3 formatos),
     canales en 4 zonas x 4 slots (guardar/recuperar con ABC/OK,
