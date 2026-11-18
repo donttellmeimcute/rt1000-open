@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RT-1000Pro · Simulador</title>
+<style>
+  * { box-sizing: border-box; }
+  body { --bg: #fff0f6; --ink: #5b2144; --muted: #a06b8a; --btn: #ffd6e8; --btn-ink: #7c2d4e;
+         --btn-fn: #f9a8d4; --btn-nav: #fbcfe8; --btn-ptt: #f472b6; --border: #f5c2d8;
+         --canvas-border: #f9a8d4; --note: #c48ba7; }
+  body.orig { --bg: #111; --ink: #eee; --muted: #aaa; --btn: #222; --btn-ink: #eee;
+         --btn-fn: #0b3d2e; --btn-nav: #1e2a4a; --btn-ptt: #4a1010; --border: #333;
+         --canvas-border: #222; --note: #666; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, sans-serif; }
+  .wrap { max-width: 340px; margin: 0 auto; padding: 10px; }
+  h1 { font-size: 14px; margin: 4px 0 8px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  h1 svg { width: 16px; height: 16px; color: #ec4899; flex: none; }
+  canvas { width: 100%; display: block; background: #000; border-radius: 14px;
+           image-rendering: pixelated; border: 6px solid var(--canvas-border); }
+  .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+  .keys button { padding: 12px 0; font-size: 16px; border-radius: 12px; border: 1px solid var(--border);
+                 background: var(--btn); color: var(--btn-ink); cursor: pointer; font-weight: 600; }
+  .keys button:active { filter: brightness(0.92); }
+  .keys button.fn { background: var(--btn-fn); }
+  .keys button.nav { background: var(--btn-nav); }
+  .keys button.ptt { background: var(--btn-ptt); color: #fff; grid-column: span 2; }
+  .demo { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .demo label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .demo input[type=range] { flex: 1; accent-color: #ec4899; }
+  .demo button { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+                 background: var(--btn); color: var(--btn-ink); cursor: pointer; }
+  .note { font-size: 11px; color: var(--note); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.8 4.6c-1.9-1.9-5-1.9-6.9 0L12 6.5l-1.9-1.9c-1.9-1.9-5-1.9-6.9 0-1.9 1.9-1.9 5 0 6.9L12 20.3l8.8-8.8c1.9-1.9 1.9-5 0-6.9z"/></svg>RT-1000Pro <span>· simulador kawaii</span></h1>
+  <canvas id="lcd" width="240" height="320"></canvas>
+  <div class="keys" id="keys"></div>
+  <div class="demo">
+    <label><button id="themeBtn">Tema: kawaii</button><span>Cambia entre rosa kawaii y el look original del radio</span></label>
+    <label><button id="gpsBtn">GPS: sin fix</button><span>Activa el fix para ver lat/lon y hora</span></label>
+    <label>Señal <input type="range" id="rssi" min="-120" max="-50" value="-87"><span id="rssiVal">-87 dBm</span></label>
+    <label><button id="resetBtn">Reiniciar radio</button></label>
+  </div>
+  <div class="note">Simulación en el navegador con el driver LCD y la lógica de la app reales
+  (misma fuente 5x7, mismos menús). No es el radio: el S-meter y el GPS son demo.</div>
+</div>
+<script>
+// Fuente 5x7 glcdfont (misma tabla que firmware/src/display.c)
+const FONT = [
+[0,0,0,0,0],
+[0,0,95,0,0],
+[0,7,0,7,0],
+[20,127,20,127,20],
+[36,42,127,42,18],
+[35,19,8,100,98],
+[54,73,85,34,80],
+[0,5,3,0,0],
+[0,28,34,65,0],
+[0,65,34,28,0],
+[20,8,62,8,20],
+[8,8,62,8,8],
+[0,80,48,0,0],
+[8,8,8,8,8],
+[0,96,96,0,0],
+[32,16,8,4,2],
+[62,81,73,69,62],
+[0,66,127,64,0],
+[66,97,81,73,70],
+[33,65,69,75,49],
+[24,20,18,127,16],
+[39,69,69,69,57],
+[60,74,73,73,48],
+[1,113,9,5,3],
+[54,73,73,73,54],
+[6,73,73,41,30],
+[0,54,54,0,0],
+[0,86,54,0,0],
+[8,20,34,65,0],
+[20,20,20,20,20],
+[0,65,34,20,8],
+[2,1,81,9,6],
+[50,73,121,65,62],
+[126,17,17,17,126],
+[127,73,73,73,54],
+[62,65,65,65,34],
+[127,65,65,34,28],
+[127,73,73,73,65],
+[127,9,9,9,1],
+[62,65,73,73,122],
+[127,8,8,8,127],
+[0,65,127,65,0],
+[32,64,65,63,1],
+[127,8,20,34,65],
+[127,64,64,64,64],
+[127,2,12,2,127],
+[127,4,8,16,127],
+[62,65,65,65,62],
+[127,9,9,9,6],
+[62,65,81,33,94],
+[127,9,25,41,70],
+[70,73,73,73,49],
+[1,1,127,1,1],
+[63,64,64,64,63],
+[31,32,64,32,31],
+[63,64,56,64,63],
+[99,20,8,20,99],
+[7,8,112,8,7],
+[97,81,73,69,67],
+[0,127,65,65,0],
+[2,4,8,16,32],
+[0,65,65,127,0],
+[4,2,1,2,4],
+[64,64,64,64,64],
+[0,1,2,4,0],
+[32,84,84,84,120],
+[127,72,68,68,56],
+[56,68,68,68,32],
+[56,68,68,72,127],
+[56,84,84,84,24],
+[8,126,9,1,2],
+[12,82,82,82,62],
+[127,8,4,4,120],
+[0,68,125,64,0],
+[32,64,68,61,0],
+[127,16,40,68,0],
+[0,65,127,64,0],
+[124,4,24,4,120],
+[124,8,4,4,120],
+[56,68,68,68,56],
+[124,20,20,20,8],
+[8,20,20,24,124],
+[124,8,4,4,8],
+[72,84,84,84,32],
+[4,63,68,64,32],
+[60,64,64,32,124],
+[28,32,64,32,28],
+[60,64,48,64,60],
+[68,40,16,40,68],
+[12,80,80,80,60],
+[68,100,84,76,68],
+[0,8,54,65,0],
+[0,0,127,0,0],
+[0,65,54,8,0],
+[16,8,8,16,8]
+];
+
+const C = {
+  BLACK: 0x0000, WHITE: 0xFFFF, RED: 0xF800, GREEN: 0x07E0, BLUE: 0x001F,
+  GRAY: 0x8410, DARK: 0x1082, YELLOW: 0xFFE0, CYAN: 0x07FF
+};
+function c565(c){ return 'rgb(' + (((c>>11)&31)*255/31|0) + ',' + (((c>>5)&63)*255/63|0) + ',' + ((c&31)*255/31|0) + ')'; }
+
+const LCD_W = 240, LCD_H = 320;
+const canvas = document.getElementById('lcd');
+const g = canvas.getContext('2d');
+let fb = new Uint16Array(LCD_W * LCD_H);
+
+function px(x, y, c){ if (x < LCD_W && y < LCD_H && x >= 0 && y >= 0) fb[y * LCD_W + x] = c; }
+function fill(c){ fb.fill(c); }
+function fillRect(x, y, w, h, c){
+  for (let yy = y; yy < y + h && yy < LCD_H; yy++)
+    for (let xx = x; xx < x + w && xx < LCD_W; xx++) fb[yy * LCD_W + xx] = c;
+}
+function hline(x, y, w, c){ fillRect(x, y, w, 1, c); }
+function text(x, y, s, scale, fg, bg){
+  scale = scale || 1;
+  for (const ch of s){
+    const code = ch.charCodeAt(0);
+    if (code >= 32 && code <= 126){
+      const gl = FONT[code - 32];
+      for (let col = 0; col < 5; col++)
+        for (let row = 0; row < 7; row++){
+          const colr = (gl[col] >> row) & 1 ? fg : bg;
+          for (let dy = 0; dy < scale; dy++)
+            for (let dx = 0; dx < scale; dx++)
+              px(x + col * scale + dx, y + row * scale + dy, colr);
+        }
+    }
+    x += 6 * scale;
+  }
+}
+function fmtFreq(hz){ return Math.floor(hz / 1000000) + '.' + String(Math.floor((hz % 1000000) / 100)).padStart(4, '0'); }
+function fmtStep(hz){ return (hz / 1000) + '.' + Math.floor((hz % 1000) / 100) + 'k'; }
+
+const MODES = ['FM', 'AM', 'USB', 'LSB', 'CW'];
+const POWERS = ['BAJA', 'MEDIA', 'ALTA'];
+const STEPS = [5000, 6250, 10000, 12500, 25000];
+const APRS_OPTS = ['OFF', '30s', '60s', '5min'];
+
+const DEFAULTS = {
+  theme: 'kawaii',
+  screen: 'splash', vfoA: 146520000, vfoB: 435000000, active: 0,
+  mode: 0, power: 2, sql: 2, stepIdx: 3, gpsOn: true, aprsIdx: 0,
+  backlight: true, gpsFix: false, rssi: -87, menuSel: 0, chanSel: 0,
+  entry: '', tx: false,
+  chans: Array.from({length: 16}, () => ({used: false, freq: 0}))
+};
+let S = window.hatchWidget ? window.hatchWidget.getState(DEFAULTS) : structuredClone(DEFAULTS);
+if (window.hatchWidget) window.addEventListener('hatch-widget-state', e => { S = e.detail.state; draw(); });
+function save(){ if (window.hatchWidget) window.hatchWidget.setState(S); draw(); }
+
+function activeFreq(){ return S.active === 0 ? S.vfoA : S.vfoB; }
+function setActiveFreq(hz){
+  hz = Math.max(150000, Math.min(480000000, hz));
+  if (S.active === 0) S.vfoA = hz; else S.vfoB = hz;
+}
+function entryParse(b){
+  const m = b.match(/^(\d{1,3})(?:\.(\d{1,4}))?$/);
+  if (!m) return null;
+  let frac = (m[2] || '');
+  while (frac.length < 4) frac += '0';
+  const hz = parseInt(m[1], 10) * 1000000 + parseInt(frac || '0', 10) * 100;
+  return (hz >= 150000 && hz <= 480000000) ? hz : null;
+}
+function smeter(x, y, w, rssi){
+  let s = Math.floor((rssi + 120) / 6);
+  s = Math.max(0, Math.min(10, s));
+  const seg = Math.floor(w / 10);
+  text(x, y, 'S', 1, C.WHITE, C.BLACK);
+  for (let i = 0; i < 10; i++){
+    const on = i < s;
+    const colr = on ? (i < 7 ? C.GREEN : (i < 9 ? C.YELLOW : C.RED)) : C.DARK;
+    fillRect(x + 10 + i * seg, y + 1, seg - 2, 6, colr);
+  }
+  text(x + 10 + 10 * seg + 2, y, 'S' + Math.min(9, s), 1, C.WHITE, C.BLACK);
+}
+function statusBar(){
+  fillRect(0, 0, LCD_W, 16, C.WHITE);
+  text(4, 4, 'XE1ARS', 1, C.BLACK, C.WHITE);
+  text(100, 4, S.tx ? 'TX' : 'RX', 1, S.tx ? C.RED : C.BLACK, C.WHITE);
+  if (S.gpsFix){
+    const d = new Date();
+    text(200, 4, String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'), 1, C.BLACK, C.WHITE);
+    text(150, 4, 'GPS', 1, C.GREEN, C.WHITE);
+  } else {
+    text(150, 4, 'SIN GPS', 1, C.RED, C.WHITE);
+  }
+}
+function drawSplash(){
+  fill(C.BLACK);
+  text(30, 96, 'RT-1000Pro', 3, C.WHITE, C.BLACK);
+  text(84, 136, 'OPEN FIRMWARE', 1, C.GREEN, C.BLACK);
+  text(84, 168, 'XE1ARS', 2, C.CYAN, C.BLACK);
+  text(96, 200, 'FW v1.0-open', 1, C.WHITE, C.BLACK);
+  text(60, 232, 'donttellmeimcute', 1, C.GRAY, C.BLACK);
+}
+function drawMain(){
+  fill(C.BLACK);
+  statusBar();
+  const colA = S.active === 0 ? C.GREEN : C.WHITE;
+  text(8, 24, 'A', 2, colA, C.BLACK);
+  text(200, 28, MODES[S.mode], 1, C.WHITE, C.BLACK);
+  text(8, 48, fmtFreq(S.vfoA), 3, S.active === 0 ? C.WHITE : C.GRAY, C.BLACK);
+  text(180, 52, 'MHz', 1, C.WHITE, C.BLACK);
+  text(8, 88, 'STEP ' + fmtStep(STEPS[S.stepIdx]) + '  SQL ' + S.sql + '  PWR ' + POWERS[S.power], 1, C.WHITE, C.BLACK);
+  smeter(8, 104, 200, S.active === 0 ? S.rssi : -120);
+  hline(0, 124, LCD_W, C.DARK);
+  const colB = S.active === 1 ? C.GREEN : C.WHITE;
+  text(8, 136, 'B', 2, colB, C.BLACK);
+  text(8, 160, fmtFreq(S.vfoB), 2, S.active === 1 ? C.WHITE : C.GRAY, C.BLACK);
+  text(180, 164, 'MHz', 1, C.WHITE, C.BLACK);
+  text(8, 188, MODES[S.mode], 1, C.WHITE, C.BLACK);
+  smeter(8, 204, 200, S.active === 1 ? S.rssi : -120);
+  hline(0, 280, LCD_W, C.DARK);
+  text(4, 292, 'OK MENU V/M VFO # GPS ABC CANAL', 1, C.WHITE, C.BLACK);
+}
+function drawEntry(){
+  drawMain();
+  fillRect(8, 128, 224, 72, C.WHITE);
+  text(16, 136, 'ENTRAR FREC. MHz:', 1, C.BLACK, C.WHITE);
+  text(16, 156, S.entry + '_', 2, C.BLACK, C.WHITE);
+  text(16, 184, 'OK confirma  BACK cancela', 1, C.BLACK, C.WHITE);
+}
+function menuValues(){
+  return [
+    S.active === 0 ? 'A' : 'B', fmtStep(STEPS[S.stepIdx]), POWERS[S.power],
+    MODES[S.mode], String(S.sql), S.gpsOn ? 'ON' : 'OFF', APRS_OPTS[S.aprsIdx],
+    S.backlight ? 'ON' : 'OFF', '>', '>'
+  ];
+}
+function drawMenu(){
+  const labels = ['VFO activo', 'Paso', 'Potencia', 'Modo', 'Squelch', 'GPS', 'APRS beacon', 'Luz pantalla', 'Canales', 'Info'];
+  const values = menuValues();
+  fill(C.BLACK);
+  fillRect(0, 0, LCD_W, 16, C.WHITE);
+  text(4, 4, 'MENU', 1, C.BLACK, C.WHITE);
+  for (let i = 0; i < 10; i++){
+    const y = 24 + i * 24;
+    if (i === S.menuSel){
+      fillRect(0, y, LCD_W, 22, C.WHITE);
+      text(8, y + 7, labels[i], 1, C.BLACK, C.WHITE);
+      text(150, y + 7, values[i], 1, C.BLACK, C.WHITE);
+    } else {
+      text(8, y + 7, labels[i], 1, C.WHITE, C.BLACK);
+      text(150, y + 7, values[i], 1, C.GREEN, C.BLACK);
+    }
+  }
+  text(4, 292, 'UP/DOWN mueve  L/R cambia  OK entra', 1, C.WHITE, C.BLACK);
+}
+function drawGps(){
+  fill(C.BLACK);
+  fillRect(0, 0, LCD_W, 16, C.WHITE);
+  text(4, 4, 'GPS', 1, C.BLACK, C.WHITE);
+  if (S.gpsFix){
+    const d = new Date();
+    const t = [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+    text(8, 32, t, 3, C.WHITE, C.BLACK);
+    text(8, 80, 'LAT 19.5145', 2, C.GREEN, C.BLACK);
+    text(8, 108, 'LON -98.8756', 2, C.GREEN, C.BLACK);
+    text(8, 140, 'ALT 2250 m  SAT 8', 1, C.WHITE, C.BLACK);
+  } else {
+    text(8, 32, 'SIN FIX', 3, C.RED, C.BLACK);
+    text(8, 80, 'Buscando satelites...', 1, C.WHITE, C.BLACK);
+    text(8, 96, 'GPS en USART3 9600', 1, C.GRAY, C.BLACK);
+  }
+  text(8, 180, 'APRS XE1ARS: ' + APRS_OPTS[S.aprsIdx], 1, C.WHITE, C.BLACK);
+  text(8, 196, 'APRS TX por AFSK: pendiente', 1, C.GRAY, C.BLACK);
+  text(4, 292, 'BACK vuelve', 1, C.WHITE, C.BLACK);
+}
+function drawChan(){
+  fill(C.BLACK);
+  fillRect(0, 0, LCD_W, 16, C.WHITE);
+  text(4, 4, 'CANALES', 1, C.BLACK, C.WHITE);
+  for (let i = 0; i < 8; i++){
+    const y = 24 + i * 28;
+    const ch = S.chans[i];
+    const line = ch.used ? String(i + 1).padStart(2, '0') + ' CH-' + String(i + 1).padStart(3, '0') + ' ' + fmtFreq(ch.freq)
+                         : String(i + 1).padStart(2, '0') + ' ------------';
+    if (i === S.chanSel){
+      fillRect(0, y, LCD_W, 24, C.WHITE);
+      text(8, y + 8, line, 1, C.BLACK, C.WHITE);
+    } else {
+      text(8, y + 8, line, 1, ch.used ? C.WHITE : C.GRAY, C.BLACK);
+    }
+  }
+  text(4, 292, 'OK recupera  ABC guarda  BACK sale', 1, C.WHITE, C.BLACK);
+}
+function drawInfo(){
+  fill(C.BLACK);
+  fillRect(0, 0, LCD_W, 16, C.WHITE);
+  text(4, 4, 'INFO', 1, C.BLACK, C.WHITE);
+  text(8, 32, 'RT-1000Pro open v1.0-open', 1, C.WHITE, C.BLACK);
+  text(8, 56, 'Callsign: XE1ARS', 1, C.GREEN, C.BLACK);
+  text(8, 88, 'HW: SIN CONFIRMAR', 1, C.RED, C.BLACK);
+  text(8, 104, 'MCU ?  BK4829 ?  LCD ?', 1, C.GRAY, C.BLACK);
+  text(8, 136, 'Flashear tests 3 y 4', 1, C.WHITE, C.BLACK);
+  text(8, 152, 'antes que la app.', 1, C.WHITE, C.BLACK);
+  text(4, 292, 'BACK vuelve', 1, C.WHITE, C.BLACK);
+}
+// Paleta kawaii: el LCD pasa de negro a rosa claro (mismo dibujo, otros colores)
+const PAL_KAWAII = {
+  0x0000: [255, 233, 243], 0xFFFF: [131, 24, 67], 0xF800: [225, 29, 72],
+  0x07E0: [236, 72, 153], 0x001F: [124, 58, 237], 0x8410: [196, 139, 167],
+  0x1082: [249, 168, 212], 0xFFE0: [245, 158, 11], 0x07FF: [219, 39, 119]
+};
+function draw(){
+  if (S.screen === 'splash') drawSplash();
+  else if (S.screen === 'main') drawMain();
+  else if (S.screen === 'entry') drawEntry();
+  else if (S.screen === 'menu') drawMenu();
+  else if (S.screen === 'gps') drawGps();
+  else if (S.screen === 'chan') drawChan();
+  else if (S.screen === 'info') drawInfo();
+  // framebuffer -> canvas
+  const img = g.createImageData(LCD_W, LCD_H);
+  const kawaii = S.theme === 'kawaii';
+  for (let i = 0; i < fb.length; i++){
+    const c = fb[i];
+    let r, gg, b;
+    if (kawaii && PAL_KAWAII[c]){ [r, gg, b] = PAL_KAWAII[c]; }
+    else {
+      r = ((c >> 11) & 31) * 255 / 31;
+      gg = ((c >> 5) & 63) * 255 / 63;
+      b = (c & 31) * 255 / 31;
+    }
+    img.data[i * 4] = r;
+    img.data[i * 4 + 1] = gg;
+    img.data[i * 4 + 2] = b;
+    img.data[i * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+}
+function menuChange(dir){
+  if (S.menuSel === 0) S.active ^= 1;
+  else if (S.menuSel === 1) S.stepIdx = (S.stepIdx + dir + 5) % 5;
+  else if (S.menuSel === 2) S.power = (S.power + dir + 3) % 3;
+  else if (S.menuSel === 3) S.mode = (S.mode + dir + 5) % 5;
+  else if (S.menuSel === 4) S.sql = (S.sql + dir + 10) % 10;
+  else if (S.menuSel === 5) S.gpsOn = !S.gpsOn;
+  else if (S.menuSel === 6) S.aprsIdx = (S.aprsIdx + dir + 4) % 4;
+  else if (S.menuSel === 7) S.backlight = !S.backlight;
+}
+function press(key){
+  if (S.screen === 'splash'){ S.screen = 'main'; save(); return; }
+  if (S.screen === 'main'){
+    if (key === 'up' || key === 'down'){
+      const d = key === 'up' ? STEPS[S.stepIdx] : -STEPS[S.stepIdx];
+      setActiveFreq(activeFreq() + d);
+    } else if (key === 'left' || key === 'right'){
+      S.stepIdx = (S.stepIdx + (key === 'right' ? 1 : 4)) % 5;
+    } else if (key === 'vm'){ S.active ^= 1; }
+    else if (key === 'ok'){ S.menuSel = 0; S.screen = 'menu'; }
+    else if (key === 'hash'){ S.screen = 'gps'; }
+    else if (key === 'abc'){ S.chanSel = 0; S.screen = 'chan'; }
+    else if (/^[0-9]$/.test(key) || key === 'star'){ S.entry = key === 'star' ? '.' : key; S.screen = 'entry'; }
+  } else if (S.screen === 'entry'){
+    if (/^[0-9]$/.test(key)){ if (S.entry.length < 15) S.entry += key; }
+    else if (key === 'star'){ if (!S.entry.includes('.') && S.entry.length < 15) S.entry += '.'; }
+    else if (key === 'ok'){ const hz = entryParse(S.entry); if (hz) setActiveFreq(hz); S.screen = 'main'; }
+    else if (key === 'back'){ S.screen = 'main'; }
+  } else if (S.screen === 'menu'){
+    if (key === 'up') S.menuSel = (S.menuSel + 9) % 10;
+    else if (key === 'down') S.menuSel = (S.menuSel + 1) % 10;
+    else if (key === 'left') menuChange(-1);
+    else if (key === 'right') menuChange(1);
+    else if (key === 'ok'){
+      if (S.menuSel === 8){ S.chanSel = 0; S.screen = 'chan'; }
+      else if (S.menuSel === 9){ S.screen = 'info'; }
+    }
+    else if (key === 'back') S.screen = 'main';
+  } else if (S.screen === 'gps'){
+    if (key === 'back' || key === 'hash') S.screen = 'main';
+  } else if (S.screen === 'chan'){
+    if (key === 'up') S.chanSel = (S.chanSel + 15) % 16;
+    else if (key === 'down') S.chanSel = (S.chanSel + 1) % 16;
+    else if (key === 'ok'){ if (S.chans[S.chanSel].used) setActiveFreq(S.chans[S.chanSel].freq); S.screen = 'main'; }
+    else if (key === 'abc'){
+      S.chans[S.chanSel] = {used: true, freq: activeFreq()};
+      S.screen = 'main';
+    }
+    else if (key === 'back') S.screen = 'main';
+  } else if (S.screen === 'info'){
+    if (key === 'back') S.screen = 'menu';
+  }
+  save();
+}
+const KEYS = [
+  ['1', 'fn'], ['2', 'fn'], ['3', 'fn'], ['OK', 'fn'],
+  ['4', 'fn'], ['5', 'fn'], ['6', 'fn'], ['ABC', 'fn'],
+  ['7', 'fn'], ['8', 'fn'], ['9', 'fn'], ['Back', 'fn'],
+  ['*', 'fn'], ['0', 'fn'], ['#', 'fn'], ['V/M', 'fn'],
+  ['Up', 'nav'], ['Down', 'nav'], ['Left', 'nav'], ['Right', 'nav'],
+];
+const KEYMAP = {'1': '1', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7', '8': '8', '9': '9', '0': '0',
+  'OK': 'ok', 'ABC': 'abc', 'Back': 'back', 'V/M': 'vm', '#': 'hash', '*': 'star',
+  'Up': 'up', 'Down': 'down', 'Left': 'left', 'Right': 'right'};
+const keyWrap = document.getElementById('keys');
+for (const [label, cls] of KEYS){
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.className = cls;
+  b.addEventListener('click', () => press(KEYMAP[label]));
+  keyWrap.appendChild(b);
+}
+const ptt = document.createElement('button');
+ptt.textContent = 'PTT (mantener)';
+ptt.className = 'ptt';
+ptt.addEventListener('pointerdown', () => { S.tx = true; save(); });
+ptt.addEventListener('pointerup', () => { S.tx = false; save(); });
+ptt.addEventListener('pointerleave', () => { if (S.tx){ S.tx = false; save(); } });
+keyWrap.appendChild(ptt);
+document.addEventListener('keydown', e => {
+  const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    Enter: 'ok', Escape: 'back', Backspace: 'back'};
+  if (map[e.key]){ press(map[e.key]); e.preventDefault(); }
+  else if (/^[0-9]$/.test(e.key)){ press(e.key); }
+  else if (e.key === '*'){ press('star'); }
+  else if (e.key === '#'){ press('hash'); }
+});
+const themeBtn = document.getElementById('themeBtn');
+function applyTheme(){
+  document.body.classList.toggle('orig', S.theme !== 'kawaii');
+  themeBtn.textContent = S.theme === 'kawaii' ? 'Tema: kawaii' : 'Tema: original';
+}
+themeBtn.addEventListener('click', () => {
+  S.theme = S.theme === 'kawaii' ? 'orig' : 'kawaii';
+  applyTheme();
+  save();
+});
+const gpsBtn = document.getElementById('gpsBtn');
+function syncGpsBtn(){ gpsBtn.textContent = S.gpsFix ? 'GPS: con fix' : 'GPS: sin fix'; }
+gpsBtn.addEventListener('click', () => { S.gpsFix = !S.gpsFix; syncGpsBtn(); save(); });
+const rssi = document.getElementById('rssi');
+const rssiVal = document.getElementById('rssiVal');
+rssi.value = S.rssi;
+rssi.addEventListener('input', () => { S.rssi = parseInt(rssi.value, 10); rssiVal.textContent = S.rssi + ' dBm'; save(); });
+document.getElementById('resetBtn').addEventListener('click', () => {
+  S = structuredClone(DEFAULTS);
+  rssi.value = S.rssi; rssiVal.textContent = S.rssi + ' dBm'; syncGpsBtn(); applyTheme();
+  save();
+  setTimeout(() => { if (S.screen === 'splash'){ S.screen = 'main'; save(); } }, 1500);
+});
+syncGpsBtn();
+applyTheme();
+rssiVal.textContent = S.rssi + ' dBm';
+draw();
+setTimeout(() => { if (S.screen === 'splash'){ S.screen = 'main'; save(); } }, 1500);
+setInterval(() => { if (S.screen === 'gps' && S.gpsFix) draw(); }, 1000);
+</script>
+</body>
+</html>
