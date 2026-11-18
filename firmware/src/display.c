@@ -47,6 +47,13 @@ void lcd_fill(uint16_t color){
     lcd_set_window(0,0,LCD_W-1,LCD_H-1);
     for(uint32_t i=0;i<(uint32_t)LCD_W*LCD_H;i++){ lcd_write_data(color>>8); lcd_write_data(color&0xFF); }
 }
+void lcd_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color){
+    if(x>=LCD_W||y>=LCD_H) return;
+    if(x+w>LCD_W) w=LCD_W-x;
+    if(y+h>LCD_H) h=LCD_H-y;
+    lcd_set_window(x,y,x+w-1,y+h-1);
+    for(uint32_t i=0;i<(uint32_t)w*h;i++){ lcd_write_data(color>>8); lcd_write_data(color&0xFF); }
+}
 void lcd_draw_pixel(uint16_t x, uint16_t y, uint16_t color){
     if(x>=LCD_W||y>=LCD_H) return;
     lcd_set_window(x,y,x,y); lcd_write_data(color>>8); lcd_write_data(color&0xFF);
@@ -61,6 +68,10 @@ static uint16_t fb[LCD_W*LCD_H];
 void lcd_init(void){ for(size_t i=0;i<sizeof fb/sizeof fb[0];i++) fb[i]=LCD_BLACK; }
 void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1){ (void)x0;(void)y0;(void)x1;(void)y1; }
 void lcd_fill(uint16_t c){ for(size_t i=0;i<sizeof fb/sizeof fb[0];i++) fb[i]=c; }
+void lcd_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t c){
+    for(uint16_t yy=y; yy<y+h && yy<LCD_H; yy++)
+        for(uint16_t xx=x; xx<x+w && xx<LCD_W; xx++) fb[yy*LCD_W+xx]=c;
+}
 void lcd_draw_pixel(uint16_t x, uint16_t y, uint16_t c){ if(x<LCD_W&&y<LCD_H) fb[y*LCD_W+x]=c; }
 void lcd_color_bars(void){ static const uint16_t b[8]={LCD_RED,LCD_GREEN,LCD_BLUE,LCD_WHITE,0xFFE0,0xF81F,0x07FF,LCD_BLACK}; for(int i=0;i<8;i++) for(int y=0;y<LCD_H;y++) for(int x=i*30;x<i*30+30;x++) fb[y*LCD_W+x]=b[i]; }
 const uint16_t *lcd_fb(void){ return fb; }
@@ -105,4 +116,8 @@ void lcd_text(uint16_t x, uint16_t y, const char *s, uint16_t fg, uint16_t bg){
         }
         x+=6; s++;
     }
+}
+uint8_t lcd_font_col(uint8_t c, uint8_t col){
+    if(c < ' ' || c > '~' || col >= 5) return 0;
+    return font5x7[c - ' '][col];
 }

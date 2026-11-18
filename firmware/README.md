@@ -1,7 +1,10 @@
-# Firmware open source — esqueleto (NO flashear todavía)
+# Firmware open source — RT-1000Pro (flasheable tras tests de hardware)
 
-Este directorio es el **punto de partida** de un firmware alternativo
-para el Radtel RT-1000Pro / UV100, no un reemplazo funcional.
+Este directorio es el firmware alternativo open source para el
+Radtel RT-1000Pro / UV100: app completa con UI, menu, GPS y APRS.
+Flasheable con el updater Python, PERO solo despues de que los
+tests de hardware (TEST=3 LCD y TEST=4 BK4829) confirmen el
+display y el transceptor en el radio real.
 
 ## Qué sí hay (actualizado 2026-11-17, noche)
 
@@ -35,10 +38,19 @@ para el Radtel RT-1000Pro / UV100, no un reemplazo funcional.
   - `aprs.c` — frame AX.25 UI + position packet (callsign por
     parámetro, no hardcodeado; AFSK/modulación es de hardware).
   - `vfo.c` — modelo VFO, rangos RX y TX permitido (airband TX: no).
+  - `ui.c` / `app.c` — UI completa (ST7789V 240x320): splash con
+    callsign, pantalla principal con VFO A grande (3x) + VFO B,
+    S-meter del BK4829, barra de estado (callsign, RX/TX, GPS),
+    menu real de 10 items (VFO, paso, potencia, modo, squelch,
+    GPS, APRS, luz, canales, info), pantalla GPS, canales en RAM
+    (16 slots, guardar/recuperar con ABC/OK) y entrada de
+    frecuencia por teclado (`*` es el punto decimal). El GPS ya
+    se alimenta del parser NMEA con los bytes de UART.
+    `make emu` renderiza todas las pantallas en `emu-out/`.
 - `linker.ld` y `Makefile` para `arm-none-eabi-gcc`, Cortex-M4 Thumb.
   `make test` usa solo gcc de host y pasa (27 checks); `make arm`
   compila con gcc-arm-none-eabi 15:13.2.rel1-2 y genera
-  `build/rt1000-open.hex` (31.344 bytes, SP 0x2000AEC8,
+  `build/rt1000-open.hex` (46.928 bytes, SP 0x2000AEC8,
   Reset 0x08002849), verificado con el updater
   (--verify-only / --dry-run, 246 paquetes OK).
   Builds de prueba de hardware en `hwtest/` (TEST=3 LCD,
@@ -80,10 +92,18 @@ completa y verificada.
 # Pruebas en host (sin toolchain ARM, lo verificable hoy)
 make test   # 21 checks: checksum, PLL, NMEA, APRS, VFO, bootloader RX
 
+# Emulacion del display: renderiza las pantallas reales a PNG
+make emu    # -> emu-out/*.png (splash, principal, menu, GPS, canales...)
+
 # Build ARM (requiere toolchain; instalacion pendiente de aprobacion)
 arm-none-eabi-gcc --version   # toolchain ARM Cortex-M
 make arm
 ```
+
+Teclas en la app: Up/Down mueve el VFO activo (paso configurable),
+Left/Right cambia el paso, V/M cambia de VFO, OK abre el menu,
+`#` abre la pantalla GPS, ABC abre canales, digitos/`*` entran
+una frecuencia directamente, Back sale de la pantalla actual.
 
 `make arm` genera `build/rt1000-open.elf` y `.hex`: una app
 completa (splash, VFO A/B, teclado, GPS, APRS, RF). Es

@@ -26,7 +26,7 @@ CFLAGS   := -mcpu=cortex-m4 -mthumb -Os -Wall -Wextra \
 LDFLAGS  := -T linker.ld -nostartfiles -Wl,--gc-sections --specs=nosys.specs
 SRCS := src/main.c src/app.c src/hw_test.c src/bootloader_protocol.c \
         src/bootloader_rx.c src/clock.c src/nmea.c src/aprs.c src/vfo.c \
-        src/display.c src/bk4829.c src/si4732.c src/keypad.c src/storage.c \
+        src/display.c src/ui.c src/bk4829.c src/si4732.c src/keypad.c src/storage.c \
         src/hal_mock.c src/hal_f4like.c src/uart_stub.c
 OBJS := $(SRCS:.c=.o)
 
@@ -80,9 +80,9 @@ emu: build/emu
 	./build/emu
 	@python3 -c "from PIL import Image; import glob; [Image.open(p).resize((480,640), Image.NEAREST).save(p.replace('.ppm','.png')) for p in sorted(glob.glob('emu-out/*.ppm'))]" 2>/dev/null || echo "PIL no disponible: quedaron solo los .ppm en emu-out/"
 
-build/emu: tests/emu.c src/display.c src/hal_mock.c src/*.h
+build/emu: tests/emu.c src/display.c src/ui.c src/hal_mock.c src/*.h
 	@mkdir -p build emu-out
-	$(HOST_CC) $(HOST_CFLAGS) tests/emu.c src/display.c src/hal_mock.c -o $@
+	$(HOST_CC) $(HOST_CFLAGS) tests/emu.c src/display.c src/ui.c src/hal_mock.c -o $@
 
 clean:
 	rm -rf build $(OBJS)

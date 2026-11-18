@@ -8,6 +8,6 @@
  * Settle time: las filas usan pull-up ~40k, necesitan mas de
  * 1 us. En el RT-1000Pro NO VERIFICADO.
  */
-#define KEY_NONE 0
+#define KEY_NONE (-1) /* -1: sin tecla. El digito 0 es codigo 0, distinto de KEY_NONE. */
 uint16_t keypad_scan_raw(void); /* bitmask de filas por columna */
 int keypad_get_key(void);       /* codigo de tecla o KEY_NONE */

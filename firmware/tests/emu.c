@@ -1,20 +1,17 @@
 /* Emulador host del display ST7789V 240x320 del RT-1000Pro.
  *
- * Renderiza las pantallas reales de app.c usando el driver LCD
- * de verdad (misma fuente 5x7, mismo framebuffer RGB565) y
- * vuelca cada pantalla a PPM. NO es el radio: es el driver
- * real corriendo en host, con los mismos strings y coordenadas
- * que ui_draw_main() en app.c. Sirve para ver como se vera la
- * UI antes de flashear el hardware real.
+ * Renderiza las pantallas reales de la app usando el driver LCD
+ * y la capa UI de verdad (ui.c), con valores demo documentados,
+ * y vuelca cada pantalla a PPM (+ PNG con `make emu`).
+ * NO es el radio: es el driver y la UI reales corriendo en host.
  *
- *   gcc -std=c11 -Wall -Wextra -Os -DRT1000_HOST_TEST=1 -Isrc \
- *       tests/emu.c src/display.c src/hal_mock.c -o build/emu
- *   ./build/emu   # deja *.ppm en emu-out/
+ *   make emu   # deja *.png en emu-out/
  */
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include "display.h"
+#include "ui.h"
 
 extern const uint16_t *lcd_fb(void);
 
@@ -35,30 +32,27 @@ static void dump_ppm(const char *path){
     printf("escrito %s\n", path);
 }
 
-/* Replica exacta de ui_draw_main() en app.c (mismos strings,
- * mismas coordenadas, mismos colores). gps_fix=1 pinta la
- * linea GPS con fix; gps_fix=0 pinta "GPS sin fix". */
-static void ui_main(int gps_fix, unsigned long fa_hz, unsigned long fb_hz){
-    char line[64];
-    lcd_fill(LCD_BLACK);
-    lcd_text(4, 4, "RT-1000Pro open", LCD_WHITE, LCD_BLACK);
-    snprintf(line, sizeof line, "A %lu.%04lu MHz",
-             fa_hz / 1000000, (fa_hz % 1000000) / 100);
-    lcd_text(4, 20, line, LCD_GREEN, LCD_BLACK);
-    snprintf(line, sizeof line, "B %lu.%04lu MHz",
-             fb_hz / 1000000, (fb_hz % 1000000) / 100);
-    lcd_text(4, 36, line, LCD_GREEN, LCD_BLACK);
-    if(gps_fix){
-        snprintf(line, sizeof line, "GPS %02d:%02d:%02d %.4f %.4f",
-                 9, 30, 0, 19.5145, -98.8756);
-        lcd_text(4, 52, line, LCD_WHITE, LCD_BLACK);
-    } else {
-        lcd_text(4, 52, "GPS sin fix", LCD_RED, LCD_BLACK);
-    }
-    lcd_text(4, 300, "MENU: OK  PTT: TX", LCD_WHITE, LCD_BLACK);
+static void demo_state(ui_state_t *s, int gps_fix, int16_t rssi){
+    memset(s, 0, sizeof *s);
+    s->vfo_a_hz = 146520000u;
+    s->vfo_b_hz = 435000000u;
+    s->active = 0;
+    s->mode = 0;      /* FM */
+    s->power = 2;     /* ALTA */
+    s->sql = 2;
+    s->step_hz = 12500;
+    s->rssi_dbm = rssi;
+    s->tx = false;
+    s->gps_fix = gps_fix;
+    s->gps_h = 9; s->gps_m = 30; s->gps_s = 0;
+    s->gps_lat = 19.5145; s->gps_lon = -98.8756;
+    s->gps_alt_m = 2250; s->gps_sats = 8;
+    s->callsign = "XE1ARS";
+    s->aprs_state = "60s";
 }
 
 int main(void){
+    ui_state_t st;
     lcd_init();
 
     /* 0: prueba de fuente: todo el ASCII imprimible 0x20-0x7E. */
@@ -79,22 +73,53 @@ int main(void){
     lcd_color_bars();
     dump_ppm("emu-out/01-barras.ppm");
 
-    /* 2: pantalla principal al encender (sin fix GPS). */
-    ui_main(0, 146520000UL, 435000000UL);
-    dump_ppm("emu-out/02-principal.ppm");
+    /* 2: splash de encendido. */
+    ui_splash("XE1ARS", "v1.0-open");
+    dump_ppm("emu-out/02-splash.ppm");
 
-    /* 3: principal con fix GPS (Texcoco). */
-    ui_main(1, 146520000UL, 435000000UL);
-    dump_ppm("emu-out/03-gps-fix.ppm");
+    /* 3: principal al encender (sin fix GPS, S-meter demo). */
+    demo_state(&st, 0, -87);
+    ui_main(&st);
+    dump_ppm("emu-out/03-principal.ppm");
 
-    /* 4: principal con OK pulsado (menu placeholder). */
-    ui_main(0, 146520000UL, 435000000UL);
-    lcd_text(4, 68, "MENU (por implementar)", LCD_WHITE, LCD_BLACK);
-    dump_ppm("emu-out/04-menu.ppm");
+    /* 4: principal con fix GPS. */
+    demo_state(&st, 1, -73);
+    ui_main(&st);
+    dump_ppm("emu-out/04-principal-gps.ppm");
 
-    /* 5: principal tras pulsar Up una vez (+12.5 kHz en VFO A). */
-    ui_main(0, 146532500UL, 435000000UL);
-    dump_ppm("emu-out/05-vfo-up.ppm");
+    /* 5: menu (seleccion en "Paso"). */
+    {
+        static const char *labels[] = {
+            "VFO activo", "Paso", "Potencia", "Modo", "Squelch",
+            "GPS", "APRS beacon", "Luz pantalla", "Canales", "Info"};
+        static const char *values[] = {
+            "A", "12.5k", "ALTA", "FM", "2",
+            "ON", "60s", "ON", ">", ">"};
+        ui_menu(labels, values, 10, 1);
+        dump_ppm("emu-out/05-menu.ppm");
+    }
+
+    /* 6: pantalla GPS. */
+    demo_state(&st, 1, -73);
+    ui_gps_screen(&st);
+    dump_ppm("emu-out/06-gps.ppm");
+
+    /* 7: canales (2 demo). */
+    {
+        rt1000_chan_t chans[16];
+        bool used[16] = {0};
+        memset(chans, 0, sizeof chans);
+        chans[0].rx_hz = 146520000u; snprintf(chans[0].name, 12, "CH-001");
+        chans[1].rx_hz = 435000000u; snprintf(chans[1].name, 12, "CH-002");
+        used[0] = used[1] = true;
+        ui_chan_screen(chans, used, 16, 0);
+        dump_ppm("emu-out/07-canales.ppm");
+    }
+
+    /* 8: entrada de frecuencia. */
+    demo_state(&st, 0, -87);
+    ui_entry(&st, "146.53");
+    dump_ppm("emu-out/08-entry.ppm");
 
     return 0;
 }
