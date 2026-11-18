@@ -12,3 +12,4 @@ __pycache__/
 .venv/
 *.o
 *.elf
+**/emu-out/*.ppm

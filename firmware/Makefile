@@ -73,6 +73,17 @@ build/host_test: $(HOST_SRCS) src/*.h
 	@mkdir -p build
 	$(HOST_CC) $(HOST_CFLAGS) $(HOST_SRCS) -lm -o $@
 
+# --- Emulador de display (host): renderiza las pantallas reales
+# con el driver LCD y vuelca PNG en emu-out/ (ver tests/emu.c) ---
+emu: build/emu
+	@mkdir -p emu-out
+	./build/emu
+	@python3 -c "from PIL import Image; import glob; [Image.open(p).resize((480,640), Image.NEAREST).save(p.replace('.ppm','.png')) for p in sorted(glob.glob('emu-out/*.ppm'))]" 2>/dev/null || echo "PIL no disponible: quedaron solo los .ppm en emu-out/"
+
+build/emu: tests/emu.c src/display.c src/hal_mock.c src/*.h
+	@mkdir -p build emu-out
+	$(HOST_CC) $(HOST_CFLAGS) tests/emu.c src/display.c src/hal_mock.c -o $@
+
 clean:
 	rm -rf build $(OBJS)
 
